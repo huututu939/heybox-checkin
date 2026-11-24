@@ -1,5 +1,9 @@
 package com.heybox.checkin.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -9,6 +13,12 @@ internal fun describe(error: Throwable): String =
     error.message?.takeIf { it.isNotBlank() }
         ?: error.cause?.message?.takeIf { it.isNotBlank() }
         ?: error.javaClass.simpleName
+
+/** 打开外部链接；没有可用的浏览器时用 Toast 兜底，不让调用方崩。 */
+internal fun openUrl(context: Context, url: String) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        .onFailure { Toast.makeText(context, "没有可打开链接的应用", Toast.LENGTH_SHORT).show() }
+}
 
 internal fun formatTime(millis: Long): String =
     SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(millis))

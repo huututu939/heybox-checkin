@@ -3,8 +3,6 @@ package com.heybox.checkin.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -12,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -38,8 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.R
 import com.heybox.checkin.data.Diagnostics
+import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
+import kotlinx.coroutines.launch
 
 private const val URL_DAILY = "https://github.com/Cansiny0320/heybox-daily"
 private const val URL_CORE = "https://github.com/XiaHouSheng/heybox-core"
@@ -104,6 +107,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = Ink.muted,
             )
+            Spacer(Modifier.height(6.dp))
+            UpdateRow()
         }
 
         Spacer(Modifier.height(14.dp))
@@ -234,14 +239,83 @@ private fun LinkLine(label: String, url: String) {
         textDecoration = TextDecoration.Underline,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                }.onFailure {
-                    Toast.makeText(context, "没有可打开链接的应用", Toast.LENGTH_SHORT).show()
-                }
-            },
+            .clickable { openUrl(context, url) },
     )
+}
+
+/** 「检查更新」的四种结果，避免用一堆布尔量互相打架。 */
+private sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Newer(val tag: String, val url: String) : UpdateState
+    data class Failed(val reason: String) : UpdateState
+}
+
+/**
+ * 版本自检入口。只在这一处联网，且必须用户点击：后台轮询既费电，也会暴露「这台机器在跑盒签」。
+ */
+@Composable
+private fun UpdateRow() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+
+    val check: () -> Unit = {
+        scope.launch {
+            state = UpdateState.Checking
+            state = UpdateCheck.latest().fold(
+                onSuccess = { info ->
+                    if (UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) {
+                        UpdateState.Newer(info.tag, info.url)
+                    } else {
+                        UpdateState.UpToDate
+                    }
+                },
+                onFailure = { UpdateState.Failed(describe(it)) },
+            )
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        when (val s = state) {
+            UpdateState.Idle -> LinkAction("检查更新", action = check)
+            UpdateState.Checking -> Text(
+                "正在检查…",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+            )
+
+            UpdateState.UpToDate -> {
+                Text("已是最新版本", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                LinkAction("再查一次", action = check)
+            }
+
+            is UpdateState.Newer -> {
+                Text("有新版本 ${s.tag}", style = MaterialTheme.typography.bodySmall, color = Ink.accent)
+                LinkAction("前往下载 →") { openUrl(context, s.url) }
+            }
+
+            is UpdateState.Failed -> {
+                Text(
+                    "检查失败：${s.reason}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.muted,
+                )
+                LinkAction("打开下载页 →") { openUrl(context, UpdateCheck.RELEASES_URL) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LinkAction(text: String, action: () -> Unit) {
+    TextButton(
+        onClick = action,
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.bodySmall, color = Ink.accent)
+    }
 }
 
 private fun copyToClipboard(context: Context, text: String) {

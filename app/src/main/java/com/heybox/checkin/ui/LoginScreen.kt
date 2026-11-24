@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.data.LoginFlow
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.ui.theme.Ink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -190,6 +192,20 @@ fun LoginScreen(
         if (message.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             StatusLine(message)
+        }
+        // 设备令牌 / 版本类失败在 App 内无法自救，给一条能直接走到下载页的路。
+        if (UpdateCheck.looksOutdated(message)) {
+            Spacer(Modifier.height(6.dp))
+            TextButton(
+                onClick = { openUrl(context, UpdateCheck.RELEASES_URL) },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            ) {
+                Text(
+                    "大概率是包太旧了，去下载页看看 →",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.accent,
+                )
+            }
         }
 
         Spacer(Modifier.height(40.dp))
