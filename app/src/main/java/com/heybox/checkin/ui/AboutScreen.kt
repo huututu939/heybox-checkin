@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +55,8 @@ fun AboutScreen(onBack: () -> Unit) {
         LicensesScreen(onBack = { showLicenses = false })
         return
     }
+    // 关于页是首页里的条件分支，不注册返回回调的话系统返回会直接 finish Activity。
+    BackHandler { onBack() }
 
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
@@ -184,6 +187,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
 @Composable
 private fun LicensesScreen(onBack: () -> Unit) {
+    BackHandler { onBack() }
     val context = LocalContext.current
     val text = remember {
         runCatching {

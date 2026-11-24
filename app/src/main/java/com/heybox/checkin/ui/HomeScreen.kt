@@ -105,6 +105,8 @@ fun HomeScreen(
     var permissions by remember { mutableStateOf(readPermissions(context)) }
     var showAbout by remember { mutableStateOf(false) }
     var enabledShares by remember { mutableStateOf(store.enabledShares()) }
+    // 提到分支外面：进关于页再返回时，首页还停在原来的位置，不会跳回顶部。
+    val homeScroll = rememberScrollState()
 
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
@@ -139,7 +141,7 @@ fun HomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(homeScroll)
             .padding(horizontal = 22.dp, vertical = 24.dp),
     ) {
         // 顶部身份
