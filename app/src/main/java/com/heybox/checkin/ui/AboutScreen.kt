@@ -110,7 +110,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = Ink.ink,
                 fontWeight = FontWeight.SemiBold,
             )
-            LinkLine("github.com/Cansiny0320/heybox-daily · MIT License", URL_DAILY)
+            LinkLine("github.com/Cansiny0320/heybox-daily", URL_DAILY)
+            Text("MIT License", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
             Spacer(Modifier.height(10.dp))
             Text(
                 "heybox-core",
@@ -118,7 +119,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = Ink.ink,
                 fontWeight = FontWeight.SemiBold,
             )
-            LinkLine("github.com/XiaHouSheng/heybox-core · MIT License", URL_CORE)
+            LinkLine("github.com/XiaHouSheng/heybox-core", URL_CORE)
+            Text("MIT License", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
             Spacer(Modifier.height(8.dp))
             Text(
                 "本项目的签到 / 分享流程、请求签名与设备指纹实现参考并移植自这两个项目。",

@@ -3,8 +3,6 @@
 盒签在实现每日签到、分享任务、请求签名与设备指纹时，参考并移植了下面两个项目。
 两者均以 MIT License 发布；按 MIT 的要求，分发本应用时需要保留下面的版权与许可声明。
 
-
-
 heybox-daily
 
 · 仓库：https://github.com/Cansiny0320/heybox-daily
@@ -31,8 +29,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
 
 heybox-core
 
@@ -61,6 +57,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-
-
 盒签自身的界面、调度、桌面小组件与关于页代码：Copyright (c) 2026 胡图图，保留所有权利。
+
