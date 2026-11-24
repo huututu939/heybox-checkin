@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#0C1512</color>
+
+    <!-- 桌面小组件用的静态色板。RemoteViews 拿不到 Compose 的 Ink token，只能落成资源；
+         夜间值见 values-night/colors.xml，跟随系统深浅。 -->
+    <color name="widget_surface">#FCF9F2</color>
+    <color name="widget_line">#D3C9B5</color>
+    <color name="widget_ink">#1B2320</color>
+    <color name="widget_muted">#5E6C64</color>
+    <color name="widget_accent">#A3671A</color>
+    <color name="widget_on_accent">#FFF8EC</color>
+</resources>

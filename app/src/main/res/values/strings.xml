@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">盒签</string>
+    <string name="widget_4x1_desc">一行看今天签没签、下次几点跑</string>
+    <string name="widget_2x2_desc">今日到账、下次时间，一键补签</string>
+</resources>
