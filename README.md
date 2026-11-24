@@ -6,6 +6,7 @@ Android 原生 · 协议层直调官方接口 · 不跑 Docker · 不用无障�
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.12-4285F4)
 ![Version](https://img.shields.io/badge/version-1.4.0-blue)
+![Release](https://img.shields.io/github/v/release/huututu939/heybox-checkin?label=release)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 装在不插 SIM 卡的备用机上，每天在可配置的时间窗口内随机挑一个时刻，自动完成小黑盒签到。三个分享任务各有开关，**默认关闭**；会话用 Android Keystore 加密，只存在本机。
@@ -67,11 +68,15 @@ Windows 用 `gradlew.bat`，或在 `local.properties` 里写 `sdk.dir=...`。
 
 ### 安装
 
+普通用户直接下载 [最新 Release](https://github.com/huututu939/heybox-checkin/releases/latest) 里的签名 `app-release.apk`，允许「安装未知来源应用」后侧载即可。
+
+从源码构建的 debug 包：
+
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-release 包需要自备签名文件（见[构建与发布](#构建与发布)）。debug 与 release 签名不同，不能互相覆盖；从 debug 换 release 需要先卸载，会丢掉本机登录态与历史。
+自己构建 release 需要自备签名文件（见[构建与发布](#构建与发布)）。debug 与 release 签名不同，不能互相覆盖；从 debug 换 release 需要先卸载，会丢掉本机登录态与历史。
 
 ## 首次登录
 
