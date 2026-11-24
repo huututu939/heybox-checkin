@@ -67,4 +67,4 @@ SOFTWARE.
 
 ---
 
-盒签自身的界面、调度、桌面小组件与关于页代码：Copyright (c) 2026 胡图图，保留所有权利。
+盒签自身代码：Copyright (c) 2026 胡图图，以 MIT License 发布，完整文本见仓库根目录 `LICENSE`。
