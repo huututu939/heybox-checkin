@@ -7,6 +7,7 @@ Android 原生 · 协议层直调官方接口 · 不跑 Docker · 不用无障�
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.12-4285F4)
 ![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![Release](https://img.shields.io/github/v/release/huututu939/heybox-checkin?label=release)
+![CI](https://github.com/huututu939/heybox-checkin/actions/workflows/android.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 装在不插 SIM 卡的备用机上，每天在可配置的时间窗口内随机挑一个时刻，自动完成小黑盒签到。三个分享任务各有开关，**默认关闭**；会话用 Android Keystore 加密，只存在本机。
@@ -237,6 +238,7 @@ app/src/main/java/com/heybox/checkin/
 - **小组件**：跨天失效、登录过期、今日 / 明日时间、分享未完成、已开启但未排定，共 7 项。
 - **真机**：华为 JER-AN10 / Android 12 完成短信登录与签到，实测经验 +90、H 币 +300、电池 +1；`dumpsys alarm` 可见精确闹钟；`force-stop` 后重开能按原时刻重落 `RUN_DAILY`。Lenovo TB710FU / Android 17 安装启动正常。
 - **构建**：debug 约 8.9 MB；当前无签名配置时 release 约 6.6 MB（`app-release-unsigned.apk`）。
+- **持续集成**：GitHub Actions（`.github/workflows/android.yml`）在每次推送与 PR 上跑 `testDebugUnitTest` + `assembleDebug`，并归档 debug APK 与测试报告。
 
 ## 已知限制与风险
 
