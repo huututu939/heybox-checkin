@@ -80,23 +80,36 @@ object Scheduler {
             at = now + 60_000L + Random.nextLong(0, 120_000L)
         }
 
-        store.setNextTrigger(at)
-        schedule(context, at)
-        return at
+        val ok = schedule(context, at)
+        // 闹钟排不上（极少数 ROM 同时拒绝精确与兜底闹钟）时不要谎报「已排定」。
+        store.setNextTrigger(if (ok) at else 0L)
+        return if (ok) at else 0L
     }
 
     fun schedule(context: Context, atMillis: Long): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pending = pendingIntent(context)
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
-        return try {
+        return runCatching {
             if (exact) manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
             else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
-            true
-        } catch (e: SecurityException) {
-            runCatching { manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending) }
-            true
-        }
+        }.recoverCatching {
+            // 精确闹钟被拒时退回非精确，至少别把这次执行整段丢掉。
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
+        }.isSuccess
+    }
+
+    /**
+     * 按 prefs 里已存的时刻重新落一次闹钟。
+     *
+     * force-stop、系统清理、部分 ROM 的后台管理会直接取消 AlarmManager 里的闹钟，
+     * 但 `next_trigger` 仍然留在未来。冷启动时如果只信这个值，就会出现「界面显示已排定、
+     * 实际没有闹钟」。这里用同一个时刻重新落一次，不重新随机，幂等。
+     */
+    fun rearm(context: Context, atMillis: Long): Boolean {
+        val ok = schedule(context, atMillis)
+        SessionStore(context).setNextTrigger(if (ok) atMillis else 0L)
+        return ok
     }
 
     fun cancel(context: Context) {

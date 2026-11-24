@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 class SessionStore(context: Context) {
 
-    private val prefs = context.applicationContext.getSharedPreferences("heybox_session", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun save(config: HeyboxConfig) {
         val editor = prefs.edit()
@@ -68,6 +68,10 @@ class SessionStore(context: Context) {
 
     fun clearSessionExpired() = prefs.edit().putBoolean(KEY_EXPIRED, false).apply()
 
+    /** 只判断凭据是否存在，不触发 Keystore 解密；开机重排闹钟时用。 */
+    fun hasCredentials(): Boolean =
+        prefs.contains(KEY_HEYBOX_ID) && prefs.contains(KEY_PKEY)
+
     fun lastResult(): String? = prefs.getString(KEY_LAST_RESULT, null)
 
     fun setLastResult(value: String) = prefs.edit().putString(KEY_LAST_RESULT, value).apply()
@@ -106,7 +110,8 @@ class SessionStore(context: Context) {
         return org.json.JSONObject().apply {
             put("at", at)
             put("executed", executed)
-            put("exp_delta", expDelta)
+            // 增量未知时不要写成 0：0 会被界面当成「这次确实没加经验」。
+            expDelta?.let { put("exp_delta", it) }
             put("coin_delta", coinDelta)
             batteryDelta?.let { put("battery_delta", it) }
             put("exp", exp)
@@ -127,7 +132,7 @@ class SessionStore(context: Context) {
         return RunRecord(
             at = json.optLong("at"),
             executed = json.optBoolean("executed"),
-            expDelta = json.optLong("exp_delta"),
+            expDelta = if (json.has("exp_delta")) json.optLong("exp_delta") else null,
             coinDelta = json.optLong("coin_delta"),
             batteryDelta = if (json.has("battery_delta")) json.optLong("battery_delta") else null,
             exp = json.optLong("exp"),
@@ -247,21 +252,22 @@ class SessionStore(context: Context) {
     private fun base64(bytes: ByteArray) = Base64.encodeToString(bytes, Base64.NO_WRAP)
 
     companion object {
+        internal const val PREFS_NAME = "heybox_session"
         private const val ALIAS = "heybox_session_key"
-        private const val KEY_HEYBOX_ID = "heybox_id"
+        internal const val KEY_HEYBOX_ID = "heybox_id"
         private const val KEY_PKEY = "pkey"
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_TOKEN = "token"
         private const val KEY_MODEL = "model"
         private const val KEY_OS = "os"
         private const val KEY_LAST_RESULT = "last_result"
-        private const val KEY_RUN_RECORD = "run_record"
+        internal const val KEY_RUN_RECORD = "run_record"
         private const val KEY_RUN_HISTORY = "run_history"
-        private const val KEY_EXPIRED = "session_expired"
-        private const val KEY_SCHEDULED = "scheduled"
+        internal const val KEY_EXPIRED = "session_expired"
+        internal const val KEY_SCHEDULED = "scheduled"
         private const val KEY_WINDOW_START = "window_start"
         private const val KEY_WINDOW_END = "window_end"
-        private const val KEY_NEXT_TRIGGER = "next_trigger"
+        internal const val KEY_NEXT_TRIGGER = "next_trigger"
         private const val KEY_LAST_RUN_DAY = "last_run_day"
         private const val KEY_RETRY_DAY = "retry_day"
         private const val KEY_RETRY_COUNT = "retry_count"
@@ -274,7 +280,10 @@ class SessionStore(context: Context) {
 
         val SHARE_TASK_IDS = listOf("1", "19", "31")
 
-        private fun keyTask(id: String) = "task_$id"
+        /** 分享任务开关的 prefs key；桌面小组件也要读同一批键。 */
+        fun shareTaskKey(id: String) = "task_$id"
+
+        private fun keyTask(id: String) = shareTaskKey(id)
 
         fun deviceInfo(): DeviceInfo = DeviceInfo(
             model = android.os.Build.MODEL ?: "unknown",

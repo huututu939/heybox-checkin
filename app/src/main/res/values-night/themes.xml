@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色启动底色与 DarkPalette.canvas 对齐；没有这份资源时深色用户会先看到一帧米白。 -->
+    <style name="Theme.HeyboxCheckin" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0D1312</item>
+        <item name="android:statusBarColor">#FF0D1312</item>
+        <item name="android:navigationBarColor">#FF0D1312</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

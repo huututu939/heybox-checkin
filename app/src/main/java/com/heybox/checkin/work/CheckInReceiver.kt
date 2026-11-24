@@ -10,6 +10,8 @@ class CheckInReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = SessionStore(context)
         if (!store.scheduledEnabled()) return
+        // 凭据被清掉（退出登录 / 重登中）时不要空跑一次再报失败；等重新登录后首页重排。
+        if (!store.hasCredentials()) return
 
         try {
             // 长流程（几十秒到两分钟）必须靠前台服务承载；在接收器里硬跑会被系统按 ANR 掐断。
@@ -20,8 +22,8 @@ class CheckInReceiver : BroadcastReceiver() {
             store.setLastResult("系统拒绝后台启动：${e.javaClass.simpleName}")
             if (store.takeRetry()) {
                 val at = System.currentTimeMillis() + 10 * 60_000L
-                store.setNextTrigger(at)
-                Scheduler.schedule(context, at)
+                val ok = Scheduler.schedule(context, at)
+                store.setNextTrigger(if (ok) at else 0L)
             }
         }
     }

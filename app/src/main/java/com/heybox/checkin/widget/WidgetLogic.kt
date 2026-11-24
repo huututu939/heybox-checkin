@@ -24,6 +24,7 @@ internal fun describeWidget(
     nextAt: Long,
     now: Long,
     loginRequired: Boolean,
+    enabledShares: Set<String> = emptySet(),
 ): WidgetData {
     if (loginRequired) {
         return WidgetData(
@@ -38,8 +39,11 @@ internal fun describeWidget(
     val today = record != null && isSameDay(record.optLong("at", 0L), now)
     val signed = today && record?.optBoolean("signed", false) == true
     val executed = today && record?.optBoolean("executed", false) == true
-    val expDelta = record?.optLong("exp_delta", 0L) ?: 0L
+    val expDelta = record?.takeIf { it.has("exp_delta") }?.optLong("exp_delta")
     val coinDelta = record?.optLong("coin_delta", 0L) ?: 0L
+    val tasks = record?.optJSONObject("tasks")
+    // 只有开启的分享任务都结算了，才算「今日已完成」；全关时签到完就算完成。
+    val shareDone = enabledShares.all { tasks?.optString(it) == "finish" }
 
     val badge = when {
         signed -> "已签到"
@@ -47,14 +51,24 @@ internal fun describeWidget(
         else -> "未同步"
     }
     val delta = when {
-        executed -> "+$expDelta 经验 · +$coinDelta H 币"
-        signed -> "今日已完成"
+        executed && expDelta != null -> "+$expDelta 经验 · +$coinDelta H 币"
+        executed -> "经验 — · +$coinDelta H 币"
+        signed && shareDone -> "今日已完成"
+        signed -> "已签到 · 分享待完成"
         today -> "今天还没签到"
         else -> "打开 App 同步"
     }
-    val next = if (!scheduled || nextAt <= 0L) "定时未开启" else "下次 ${shortTime(nextAt, now)}"
+    val next = when {
+        !scheduled -> "定时未开启"
+        nextAt <= 0L -> "定时已开启 · 尚未排定"
+        else -> "下次 ${shortTime(nextAt, now)}"
+    }
     val status = if (signed) "已签到" else if (today) "待签到" else "未同步"
-    val schedule = if (scheduled && nextAt > 0L) "下次 ${shortTime(nextAt, now)}" else "定时未开启"
+    val schedule = when {
+        !scheduled -> "定时未开启"
+        nextAt <= 0L -> "尚未排定"
+        else -> "下次 ${shortTime(nextAt, now)}"
+    }
     return WidgetData(line = "$status · $schedule", badge = badge, delta = delta, next = next)
 }
 

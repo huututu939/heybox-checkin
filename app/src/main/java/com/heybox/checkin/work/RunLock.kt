@@ -11,6 +11,9 @@ object RunLock {
 
     fun tryAcquire(): Boolean = running.compareAndSet(false, true)
 
+    /** 界面点「立即执行」前先看一眼，避免明知有人在跑还去拉起服务。 */
+    fun isBusy(): Boolean = running.get()
+
     fun release() {
         running.set(false)
     }

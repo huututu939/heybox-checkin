@@ -42,35 +42,32 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
-import com.heybox.checkin.core.HeyboxClient
 import com.heybox.checkin.core.HeyboxConfig
-import com.heybox.checkin.core.SessionExpiredException
-import com.heybox.checkin.core.TaskParser
-import com.heybox.checkin.core.TaskRunner
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
+import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
+import com.heybox.checkin.work.RunState
 import com.heybox.checkin.work.Scheduler
 import com.heybox.checkin.widget.Widgets
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private data class Permissions(val notify: Boolean, val battery: Boolean, val exactAlarm: Boolean) {
     val readyCount: Int get() = listOf(notify, battery, exactAlarm).count { it }
@@ -89,7 +86,6 @@ fun HomeScreen(
     onRelogin: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     var record by remember { mutableStateOf(store.loadRun()) }
     var history by remember { mutableStateOf(recentHistory(store)) }
     var historyOpen by remember { mutableStateOf(false) }
@@ -99,8 +95,10 @@ fun HomeScreen(
     var startHour by remember { mutableStateOf(store.windowStart()) }
     var endHour by remember { mutableStateOf(store.windowEnd()) }
     var expired by remember { mutableStateOf(store.sessionExpired()) }
-    var running by remember { mutableStateOf(false) }
-    var stage by remember { mutableStateOf("") }
+    val running by RunState.running.collectAsState()
+    val stage by RunState.stage.collectAsState()
+    var launching by remember { mutableStateOf(false) }
+    var sawRunning by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var permissions by remember { mutableStateOf(readPermissions(context)) }
     var showAbout by remember { mutableStateOf(false) }
@@ -113,22 +111,63 @@ fun HomeScreen(
         return
     }
 
-    LaunchedEffect(Unit) {
-        if (scheduled) nextAt = Scheduler.scheduleNext(context)
-    }
     LaunchedEffect(resumeTick) {
         permissions = readPermissions(context)
-        nextAt = store.nextTrigger()
+        scheduled = store.scheduledEnabled()
+        val stored = store.nextTrigger()
+        nextAt = if (scheduled) {
+            when {
+                // 正在执行的那次会自己排下一次，这里别抢。
+                RunLock.isBusy() || RunState.running.value -> stored
+                // 未来的时间不要重新抽签，但要重新落一次闹钟：
+                // force-stop / 系统清理会取消 AlarmManager 里的闹钟，只留下 prefs 里的时间。
+                stored > System.currentTimeMillis() -> if (Scheduler.rearm(context, stored)) stored else 0L
+                else -> Scheduler.scheduleNext(context)
+            }
+        } else {
+            0L
+        }
         expired = store.sessionExpired()
         history = recentHistory(store)
         record = store.loadRun()
         Widgets.refresh(context)
     }
+    LaunchedEffect(running) {
+        launching = false
+        if (running) {
+            sawRunning = true
+            return@LaunchedEffect
+        }
+        scheduled = store.scheduledEnabled()
+        nextAt = store.nextTrigger()
+        expired = store.sessionExpired()
+        history = recentHistory(store)
+        record = store.loadRun()
+        // 只在「这次界面亲眼看到过一次执行结束」后回填错误，
+        // 避免冷启动时把昨天留下的失败文案又顶到横幅里。
+        if (sawRunning) {
+            sawRunning = false
+            val result = store.lastResult()
+            error = if (result != null && (result.startsWith("失败") || result.startsWith("登录已过期"))) {
+                result
+            } else {
+                null
+            }
+        }
+        Widgets.refresh(context)
+    }
+    // 服务启动到 RunState 置位之间有个很短的窗口，按钮先锁住，避免连点拉起两次。
+    LaunchedEffect(launching) {
+        if (launching) {
+            delay(2500)
+            if (!RunState.running.value) launching = false
+        }
+    }
 
     val now = System.currentTimeMillis()
     val ranToday = record?.let { isSameLocalDay(it.at, now) } == true
     val shareDone = record?.let { run ->
-        TaskParser.SHARE_IDS.all { run.taskStates[it] == "finish" }
+        enabledShares.all { run.taskStates[it] == "finish" }
     } == true
     val status = when {
         running -> "执行中"
@@ -267,66 +306,19 @@ fun HomeScreen(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                if (!RunLock.tryAcquire()) {
+                if (RunLock.isBusy()) {
                     error = "已有一次任务在执行，本次忽略"
                     return@Button
                 }
                 error = null
-                running = true
-                stage = "检查今日状态"
-                scope.launch {
-                    try {
-                        val runner = TaskRunner(
-                            client = HeyboxClient(config),
-                            account = config.session.heyboxId,
-                            onStage = { stage = stageText(it) },
-                            enabledShares = enabledShares,
-                        )
-                        runCatching { runner.runDaily() }
-                            .onSuccess { report ->
-                                // 只有真的打了签到/分享请求才算「本次执行」，否则只是刷新了余额。
-                                val didExecute = report.execution.values.any { it == "executed" }
-                                val fresh = RunRecord.from(
-                                    snapshot = report.snapshot,
-                                    signed = true,
-                                    report = if (didExecute) report else null,
-                                )
-                                val prev = store.loadRun()
-                                    ?.takeIf { isSameLocalDay(it.at, System.currentTimeMillis()) }
-                                val merged = when {
-                                    didExecute -> prev?.withAnotherRun(fresh) ?: fresh
-                                    prev != null -> prev.withBalanceOnly(fresh)
-                                    else -> fresh
-                                }
-                                store.saveRun(merged)
-                                store.markRanToday()
-                                store.clearSessionExpired()
-                                store.setLastResult(
-                                    "经验 +${report.expDelta?.toString() ?: "?"} · H币 +${report.coinDelta}",
-                                )
-                                record = merged
-                                history = recentHistory(store)
-                                expired = false
-                                Widgets.refresh(context)
-                                stage = ""
-                            }
-                            .onFailure {
-                                if (it is SessionExpiredException) {
-                                    store.markSessionExpired()
-                                    expired = true
-                                }
-                                error = describe(it)
-                                store.setLastResult("失败：${describe(it)}")
-                                stage = ""
-                            }
-                        if (scheduled) nextAt = Scheduler.scheduleNext(context, skipToday = true)
-                    } finally {
-                        RunLock.release()
-                        running = false
+                launching = true
+                runCatching { CheckInService.start(context, force = true) }
+                    .onFailure {
+                        launching = false
+                        error = "无法启动执行服务：${describe(it)}"
                     }
-                }
             },
-            enabled = !running,
+            enabled = !running && !launching,
             shape = RoundedCornerShape(100.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Ink.accent,
@@ -475,6 +467,8 @@ private fun HeroCard(
                 Spacer(Modifier.height(6.dp))
                 if (scheduled && nextAt > 0L) {
                     Text(formatTime(nextAt), style = NumberSmall, color = Ink.ink, fontSize = 17.sp)
+                } else if (scheduled) {
+                    Text("尚未排定", style = NumberSmall, color = Ink.muted, fontSize = 17.sp)
                 } else {
                     Text("定时未开启", style = NumberSmall, color = Ink.muted, fontSize = 17.sp)
                 }
@@ -671,7 +665,11 @@ private fun ScheduleCard(
                 Text("每天自动签到", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (scheduled && nextAt > 0L) "下次 ${formatTime(nextAt)} · 每天重新随机" else "关闭中 · 不会自动执行",
+                    when {
+                        scheduled && nextAt > 0L -> "下次 ${formatTime(nextAt)} · 每天重新随机"
+                        scheduled -> "已开启，但系统暂未允许排定 · 检查精确闹钟权限"
+                        else -> "关闭中 · 不会自动执行"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = Ink.muted,
                 )
@@ -821,7 +819,7 @@ private fun HistoryRow(run: RunRecord) {
     ) {
         Text(formatMonthDay(run.at), style = NumberSmall, color = Ink.ink, fontSize = 14.sp)
         Text(
-            if (run.executed) "经验 +${run.expDelta} · H 币 +${run.coinDelta}" else "未执行（已由其它入口完成）",
+            if (run.executed) "经验 ${run.expDelta?.let { "+$it" } ?: "—"} · H 币 +${run.coinDelta}" else "未执行（已由其它入口完成）",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
             modifier = Modifier.weight(1f).padding(start = 14.dp),

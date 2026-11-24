@@ -13,9 +13,6 @@ internal fun describe(error: Throwable): String =
 internal fun formatTime(millis: Long): String =
     SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(millis))
 
-internal fun formatClock(millis: Long): String =
-    SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(millis))
-
 internal fun formatDay(millis: Long): String =
     SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(millis))
 
@@ -29,17 +26,4 @@ internal fun isSameLocalDay(a: Long, b: Long): Boolean {
     val cb = Calendar.getInstance().apply { timeInMillis = b }
     return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) &&
         ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
-}
-
-internal fun stageText(stage: String): String = when {
-    stage == "inspect" -> "检查今日状态"
-    stage == "sign" -> "正在签到"
-    stage == "verify" -> "核对结果"
-    stage.startsWith("share_") -> when (stage.removePrefix("share_")) {
-        "1" -> "分享帖子"
-        "19" -> "分享游戏"
-        "31" -> "分享游戏评价"
-        else -> "分享任务"
-    }
-    else -> stage
 }

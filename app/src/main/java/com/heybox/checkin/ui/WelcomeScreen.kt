@@ -61,7 +61,8 @@ fun WelcomeScreen(onAccept: () -> Unit) {
         NoticeBlock(
             index = "02",
             title = "数据留在哪",
-            body = "手机号、pkey 与设备标识只加密存在这台手机上；请求直接发往小黑盒官方接口。" +
+            body = "手机号、pkey 与设备标识只加密存在这台手机上；签到请求直接发往小黑盒官方接口。" +
+                "登录时会加载官方设备指纹组件（static.portal101.cn，源码带 SHA-256 校验）；" +
                 "没有中转服务器、没有统计 SDK，也不读取通讯录、相册与位置。",
         )
         Spacer(Modifier.height(12.dp))

@@ -48,7 +48,8 @@ class LoginFlow(private val context: Context, private val store: SessionStore) {
         }
 
         val authenticated = config.copy(session = config.session.copy(heyboxId = account, pkey = pkey))
-        TaskParser.snapshot(HeyboxClient(authenticated).tasksResult(), account)
+        // 登录时只校验账号与基础结构，不要求分享任务存在：分享默认关闭，不能挡住纯签到。
+        TaskParser.snapshot(HeyboxClient(authenticated).tasksResult(), account, emptySet())
         store.save(authenticated)
         pending = null
         pendingPhone = null

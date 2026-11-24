@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.heybox.checkin.R
+import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.MainActivity
 import com.heybox.checkin.work.CheckInService
 import org.json.JSONObject
@@ -17,13 +18,6 @@ import org.json.JSONObject
  * 也顺带把进程重要性往上抬一档（有 widget 的包被回收得更晚）。
  */
 object Widgets {
-
-    private const val PREFS = "heybox_session"
-    private const val KEY_RECORD = "run_record"
-    private const val KEY_SCHEDULED = "scheduled"
-    private const val KEY_NEXT = "next_trigger"
-    private const val KEY_LOGIN = "heybox_id"
-    private const val KEY_EXPIRED = "session_expired"
 
     fun refresh(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
@@ -60,17 +54,21 @@ object Widgets {
     }
 
     private fun read(context: Context): WidgetData {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val raw = prefs.getString(KEY_RECORD, null)
+        val prefs = context.getSharedPreferences(SessionStore.PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(SessionStore.KEY_RUN_RECORD, null)
         val record = runCatching { raw?.let { JSONObject(it) } }.getOrNull()
-        val hasLogin = prefs.getString(KEY_LOGIN, null) != null
-        val expired = prefs.getBoolean(KEY_EXPIRED, false)
+        val hasLogin = prefs.getString(SessionStore.KEY_HEYBOX_ID, null) != null
+        val expired = prefs.getBoolean(SessionStore.KEY_EXPIRED, false)
+        val enabledShares = SessionStore.SHARE_TASK_IDS
+            .filter { prefs.getBoolean(SessionStore.shareTaskKey(it), false) }
+            .toSet()
         return describeWidget(
             record = record,
-            scheduled = prefs.getBoolean(KEY_SCHEDULED, false),
-            nextAt = prefs.getLong(KEY_NEXT, 0L),
+            scheduled = prefs.getBoolean(SessionStore.KEY_SCHEDULED, false),
+            nextAt = prefs.getLong(SessionStore.KEY_NEXT_TRIGGER, 0L),
             now = System.currentTimeMillis(),
             loginRequired = !hasLogin || expired,
+            enabledShares = enabledShares,
         )
     }
 

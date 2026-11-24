@@ -66,4 +66,30 @@ class WidgetLogicTest {
         val data = describeWidget(null, scheduled = true, nextAt = next, now = now, loginRequired = false)
         assertEquals("下次 11/25 08:15", data.next)
     }
+
+    @Test
+    fun signedWithEnabledSharePendingIsNotFullyDone() {
+        val now = at(2026, 11, 24, 12, 0)
+        val record = record(now, signed = true).put(
+            "tasks",
+            JSONObject().put("1", "waiting").put("19", "finish").put("31", "finish"),
+        )
+        val data = describeWidget(
+            record = record,
+            scheduled = true,
+            nextAt = 0L,
+            now = now,
+            loginRequired = false,
+            enabledShares = setOf("1"),
+        )
+        assertEquals("已签到 · 分享待完成", data.delta)
+    }
+
+    @Test
+    fun scheduledButUnscheduledAlarmIsNotShownAsOff() {
+        val now = at(2026, 11, 24, 9, 0)
+        val data = describeWidget(null, scheduled = true, nextAt = 0L, now = now, loginRequired = false)
+        assertEquals("定时已开启 · 尚未排定", data.next)
+        assertEquals("未同步 · 尚未排定", data.line)
+    }
 }

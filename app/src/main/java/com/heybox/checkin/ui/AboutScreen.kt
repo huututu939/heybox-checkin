@@ -99,7 +99,8 @@ fun AboutScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "协议层直调官方接口，不跑 Docker、不做无障碍点击、不经过任何第三方托管。",
+                "协议层直调官方接口，不跑 Docker、不做无障碍点击；签到数据不经过任何第三方托管，" +
+                    "登录时仅加载官方设备指纹组件。",
                 style = MaterialTheme.typography.bodySmall,
                 color = Ink.muted,
             )

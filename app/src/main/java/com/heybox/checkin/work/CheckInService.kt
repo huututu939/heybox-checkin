@@ -11,6 +11,7 @@ import com.heybox.checkin.core.TaskRunner
 import com.heybox.checkin.widget.Widgets
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +35,8 @@ class CheckInService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(SERVICE_ID, Notifications.serviceNotification(this, "准备中…"))
+        // 同一实例重复收到 start 时，不要用「准备中」覆盖正在跑的那次进度。
+        startForeground(SERVICE_ID, Notifications.serviceNotification(this, RunState.stage.value.ifEmpty { "准备中…" }))
         val force = intent?.getBooleanExtra(EXTRA_FORCE, false) == true
         if (job?.isActive != true) job = scope.launch { runDaily(force) }
         return START_NOT_STICKY
@@ -61,14 +63,18 @@ class CheckInService : Service() {
     private suspend fun runDaily(force: Boolean) {
         val store = SessionStore(this)
         if (!RunLock.tryAcquire()) {
-            // 另一次执行持有锁，它自己会负责排下一次，这里不要覆盖它的闹钟。
-            finish(store, false, "已有一次任务正在执行，本次跳过", reschedule = false)
+            // 另一次执行持有锁，它自己会负责排下一次。这里只是重复启动，
+            // 既不能覆盖它的闹钟，也不该发一条「签到失败」通知。
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
             return
         }
+        RunState.start("检查今日状态…")
         try {
             execute(store, force)
         } finally {
             RunLock.release()
+            RunState.finish()
         }
     }
 
@@ -82,7 +88,11 @@ class CheckInService : Service() {
         val runner = TaskRunner(
             client = HeyboxClient(config),
             account = config.session.heyboxId,
-            onStage = { stage -> Notifications.updateService(this, stageText(stage)) },
+            onStage = { stage ->
+                val text = stageText(stage)
+                RunState.stage(text)
+                Notifications.updateService(this, text)
+            },
             enabledShares = store.enabledShares(),
         )
 
@@ -112,6 +122,9 @@ class CheckInService : Service() {
             store.clearSessionExpired()
             store.saveRun(mergeRun(store, RunRecord.from(report.snapshot, true, report)))
             finish(store, true, text)
+        } catch (e: CancellationException) {
+            // 服务被系统回收 / 主动停止：把取消继续往上抛，不要报成签到失败。
+            throw e
         } catch (e: SessionExpiredException) {
             store.markSessionExpired()
             store.setLastResult("登录已过期：${e.message}")
@@ -126,29 +139,25 @@ class CheckInService : Service() {
 
     /**
      * @param retry 失败时是否用当天重试预算再试一次（10–25 分钟后），预算用完就排到明天。
-     * @param reschedule false 表示这次没有真正执行，不应该覆盖另一次执行排好的闹钟。
      */
     private fun finish(
         store: SessionStore,
         success: Boolean,
         text: String,
         retry: Boolean = false,
-        reschedule: Boolean = true,
     ) {
         Notifications.result(this, success, text)
-        if (reschedule) {
-            when {
-                success -> {
-                    store.resetRetry()
-                    Scheduler.scheduleNext(this, skipToday = true)
-                }
-                retry && store.takeRetry() -> {
-                    val at = System.currentTimeMillis() + Random.nextLong(600_000L, 1_500_000L)
-                    store.setNextTrigger(at)
-                    Scheduler.schedule(this, at)
-                }
-                else -> Scheduler.scheduleNext(this, skipToday = true)
+        when {
+            success -> {
+                store.resetRetry()
+                Scheduler.scheduleNext(this, skipToday = true)
             }
+            retry && store.takeRetry() -> {
+                val at = System.currentTimeMillis() + Random.nextLong(600_000L, 1_500_000L)
+                val ok = Scheduler.schedule(this, at)
+                store.setNextTrigger(if (ok) at else 0L)
+            }
+            else -> Scheduler.scheduleNext(this, skipToday = true)
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
         Widgets.refresh(this)
@@ -176,8 +185,9 @@ class CheckInService : Service() {
         const val EXTRA_FORCE = "force"
         private const val SERVICE_ID = 10
 
-        fun start(context: Context) {
+        fun start(context: Context, force: Boolean = false) {
             val intent = Intent(context, CheckInService::class.java)
+            if (force) intent.putExtra(EXTRA_FORCE, true)
             context.startForegroundService(intent)
         }
     }

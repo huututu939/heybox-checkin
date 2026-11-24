@@ -54,4 +54,28 @@ class TaskParserTest {
         assertEquals("ok", state.state)
         assertEquals(20664L, state.signedDate)
     }
+
+    @Test
+    fun disabledShareTaskCanBeMissingOrAbnormal() {
+        val root = JSONObject(payload)
+        val tasks = root.getJSONArray("task_list").getJSONObject(0).getJSONArray("tasks")
+        // 去掉「分享游戏」(19)，再把「分享游戏评价」(31) 改成异常状态。
+        tasks.remove(2)
+        tasks.getJSONObject(2).put("state", "unknown")
+
+        // 默认不要求分享任务：纯签到不应该被上游任务调整卡住。
+        val snapshot = TaskParser.snapshot(root, "12345678")
+        assertEquals(null, snapshot.stateOf("19"))
+        assertEquals("unknown", snapshot.stateOf("31"))
+    }
+
+    @Test
+    fun enabledShareTaskMustExistAndBeUsable() {
+        val root = JSONObject(payload)
+        val tasks = root.getJSONArray("task_list").getJSONObject(0).getJSONArray("tasks")
+        tasks.remove(2) // 19
+
+        val missing = runCatching { TaskParser.snapshot(root, "12345678", setOf("19")) }.exceptionOrNull()
+        assertTrue(missing is IllegalStateException)
+    }
 }

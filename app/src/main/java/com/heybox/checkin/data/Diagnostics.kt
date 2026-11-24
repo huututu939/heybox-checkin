@@ -50,10 +50,6 @@ object Diagnostics {
         if (f.exists()) f.readText() else null
     }.getOrNull()
 
-    fun clearCrash(context: Context) {
-        runCatching { File(context.filesDir, CRASH_FILE).delete() }
-    }
-
     /** 全局异常兜底：把崩溃写进 filesDir，再交给系统默认处理器，不吞异常。 */
     fun installCrashHandler(context: Context) {
         val app = context.applicationContext

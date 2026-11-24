@@ -31,7 +31,7 @@ class TaskRunner(
     private val delays = longArrayOf(2000, 3000, 5000, 10000)
 
     suspend fun inspect(): Inspection = withContext(Dispatchers.IO) {
-        val snapshot = TaskParser.snapshot(client.tasksResult(), account)
+        val snapshot = TaskParser.snapshot(client.tasksResult(), account, enabledShares)
         val sign = TaskParser.signState(client.signStateResult())
         Inspection(snapshot, TaskParser.signedToday(sign))
     }
@@ -68,7 +68,7 @@ class TaskRunner(
             }
             if (!verified) throw IllegalStateException("签到未确认到账，任务已停止")
             onLog("签到完成")
-            absorb(TaskParser.snapshot(client.tasksResult(), account))
+            absorb(TaskParser.snapshot(client.tasksResult(), account, enabledShares))
         } else {
             record("sign", "skipped")
             onLog("今天已签到")
@@ -104,7 +104,7 @@ class TaskRunner(
             var settled = false
             for (wait in delays) {
                 delay(wait + Random.nextLong(0, 1000))
-                absorb(TaskParser.snapshot(client.tasksResult(), account))
+                absorb(TaskParser.snapshot(client.tasksResult(), account, enabledShares))
                 if (current.stateOf(id) == "finish") {
                     settled = true
                     break

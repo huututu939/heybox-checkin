@@ -69,7 +69,8 @@ app\build\outputs\apk\release\app-release.apk
 - 签名：上游 `test/fixtures/native-v14.json` 的 **24 组黄金向量**，`hkey` / `_rnd` / `_time` 逐字段一致（`app/src/test/.../HeyboxSignGoldenTest.kt`）
 - 协议：Base64 换行、RSA 密文长度、上报体加解密往返与 sid、native / web 两套 URL 与请求头、Cookie 逐字匹配、手机号归一化、分享事件字段、北京时间日切判断，**共 10 项**（`HeyboxProtocolTest.kt`）
 - 调度：随机时刻落在窗口内、跨天不重复（`SchedulerTest.kt`）
-- 小组件：今天已签 / 昨天记录跨天失效 / 登录过期 / 今日与明日时间格式，**5 项**（`WidgetLogicTest.kt`）
+- 小组件：今天已签 / 昨天记录跨天失效 / 登录过期 / 今日与明日时间格式 / 开关分享未完成 / 已开启但未排定，**7 项**（`WidgetLogicTest.kt`）
+- 解析：关闭的分享任务缺失或状态异常不影响签到，启用的分享任务缺失则明确失败（`TaskParserTest.kt`）
 - 构建：`gradle testDebugUnitTest assembleDebug assembleRelease` 通过；debug 约 9.5 MB，release 约 6.9 MB
 
 ```powershell
@@ -88,6 +89,7 @@ F:\dev-tools\gradle-8.13\bin\gradle.bat assembleDebug
 - 第二轮打磨实测（同一台华为）：执行时段 +1 小时立刻把「下一次」改写并重排（prefs `window_end=21`、`next_trigger` 变化）；「最近七天」从旧记录补位显示 `11/24 未执行（已由其它入口完成）`；`--ez preview_expired true` 下过期横幅正常出现（文案 + 重新登录）；自启动「去设置」在 EMUI 12 上被签名级权限拦下，按设计回落到应用详情页并给出机型指引
 - 关于页实测：首页底部「关于」可进入，版本显示 v1.3.0（build 13），参考项目与三句免责声明完整，末尾「By 胡图图」；白天 / 夜间两套色板都正常，「← 返回」回到首页且不退出应用
 - 发布前回归（2026-11-24，同一台华为 / Android 12）：首启「开始之前」正常拦截并可进入登录；关于页 v1.4.0、两条参考项目链接可点、开源许可页可滚动；「复制诊断信息」点击后出现 toast 且按钮变「已复制」；登录页点验证码框后输入框停在键盘上沿（截图 `tools/login-keyboard.png`）；2×2 小组件仍在桌面正常渲染「已签到 / 今日已完成 / 定时未开启」。
+- 第三轮修复实测（2026-11-24，华为 JER-AN10）：覆盖安装 debug 包后登录成功，首页显示「今日已完成」、分享全关、下一次 11/25 15:45；点「立即执行一次」后由前台服务接管，检测到今日已完成并发出「今日签到完成 / 今天已完成，跳过」通知，下一次重排为 11/25 13:41；`force-stop` 后重开，AlarmManager 里重新出现 `RUN_DAILY`（`origWhen=2026-11-25 13:41:05`，`exactAllowReason=permission`），`next_trigger` 未被改写，验证「只补闹钟、不重抽」。
 - 过程中修掉两个真机才暴露的 bug：登录请求误在主线程（`NetworkOnMainThreadException`，message 为 null）；`TaskParser` 的 `Any?.toLongOrNull` 自己调自己导致 `StackOverflowError`
 
 ## 逻辑审查（2026-11-24）
@@ -95,7 +97,8 @@ F:\dev-tools\gradle-8.13\bin\gradle.bat assembleDebug
 重复执行、漏签、并发与失败重试这几个点单独做了处理：
 
 - **同一天不会排两次**：`last_run_day` 记住今天已跑过，跑完（含「今天已完成，跳过」）一律把下一次强制排到明天窗口；实测第二次执行得到「经验 +0 · H 币 +0」，没有重复签到请求。
-- **进程内互斥**：闹钟、前台服务、界面「立即执行一次」共用一个 `RunLock`，并发时后来者直接放弃，不会出现两次签到叠加。
+- **进程内互斥**：闹钟、前台服务、界面「立即执行一次」共用一个 `RunLock`；界面现在也只负责拉起前台服务，不再自己跑长流程。并发时后来者静默退出，不会出现两次签到叠加，也不会误发一条「签到失败」通知。
+- **冷启动只补闹钟、不重抽**：`force-stop`、系统清理或部分 ROM 的后台管理会取消 AlarmManager 里的闹钟，但 `next_trigger` 仍留在未来。首页恢复时如果只信这个值，就会出现「显示已排定、实际没闹钟」。现在会用同一个时刻重新落一次闹钟，不改变今天的随机时间；只有时间已过或从未排过才重新抽签。
 - **窗口过期不漏签**：如果今天还没跑、但随机窗口已过完，会把下一次设成 1–3 分钟后补跑，而不是静默推到明天。
 - **失败重试有预算**：当天最多重试 2 次（10–25 分钟后），预算用完排到明天，避免夜里失败后每两分钟打一次接口。
 - **接收器不长跑**：闹钟触发只负责拉起前台服务；系统拒绝后台启动时给通知并按预算延后，不在 `BroadcastReceiver` 里执行两分钟的任务（否则必然 ANR）。
@@ -143,7 +146,7 @@ adb shell am start -n com.heybox.checkin/.ui.MainActivity --ez preview_expired t
 
 ## 任务范围开关（2026-11-24）
 
-「每日四件」里签到固定执行，三个分享任务各带一个「开 / 关」胶囊，**默认全关**。理由是这两类动作性质不同：签到是领自己账号的奖励，分享（帖子 / 游戏 / 评价）是往平台灌互动数据，默认不该替使用者决定。开关落到 `task_1` / `task_19` / `task_31` 三个布尔，`TaskRunner` 只跑集合内的 id，最终校验也只校验已开启的任务；关掉的任务在执行记录里记为 `disabled`，不占用重试。
+「每日四件」里签到固定执行，三个分享任务各带一个「开 / 关」胶囊，**默认全关**。理由是这两类动作性质不同：签到是领自己账号的奖励，分享（帖子 / 游戏 / 评价）是往平台灌互动数据，默认不该替使用者决定。开关落到 `task_1` / `task_19` / `task_31` 三个布尔，`TaskRunner` 只跑集合内的 id，最终校验也只校验已开启的任务；关掉的任务在执行记录里记为 `disabled`，不占用重试。解析层同样只校验开启的分享任务——关掉的任务即使上游缺失或状态变化，也不会把纯签到一起卡死。
 
 关掉之后，登录后不开任何开关，App 的行为就是「每天随机时间签到一次」，请求量比全开少三分之二。
 
@@ -151,7 +154,7 @@ adb shell am start -n com.heybox.checkin/.ui.MainActivity --ez preview_expired t
 
 首页底部「退出登录」旁边多了「关于」，点进去是一页三块：版本、参考项目、免责声明，末尾署名 **By 胡图图**。
 
-- **版本**：直接读 `BuildConfig`（v1.4.0 / build 14），并写明「协议层直调官方接口，不跑 Docker、不做无障碍点击、不经过任何第三方托管」。
+- **版本**：直接读 `BuildConfig`（v1.4.0 / build 14），并写明「协议层直调官方接口，不跑 Docker、不做无障碍点击；签到数据不经过任何第三方托管，登录时仅加载官方设备指纹组件」。
 - **参考项目**：`Cansiny0320/heybox-daily` 与 `XiaHouSheng/heybox-core`（均 MIT License），两条链接都可点开；下方「查看完整开源许可」进入独立页，直接读 `res/raw/third_party_notices.txt` 的全文。
 - **免责声明**：压成三句——非官方客户端、与官方无关联或授权；仅供个人学习，禁止代签 / 售卖等商业行为；账号风险与数据异常由使用者自行承担。
 - **遇到问题**：一个「复制诊断信息」按钮，把版本 / 机型 / 权限 / 调度 / 上次结果 / 最近崩溃拼成文本写进剪贴板，不含 heybox_id、pkey、token。
@@ -227,6 +230,8 @@ app/src/main/java/com/heybox/checkin/
 ├── work/CheckInService.kt    前台服务执行签到
 ├── work/CheckInReceiver.kt   闹钟触发（起服务，失败兜底）
 ├── work/BootReceiver.kt      重启后重排闹钟
+├── work/RunLock.kt           进程内执行互斥
+├── work/RunState.kt          执行状态（首页只观察，不自己跑）
 ├── work/Notifications.kt     通知渠道与进度
 ├── HeyboxApp.kt              Application，安装崩溃兜底
 ├── ui/MainActivity.kt        界面根（会话态 + 预览开关 + 首启门）

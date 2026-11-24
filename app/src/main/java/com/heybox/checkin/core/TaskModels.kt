@@ -43,14 +43,19 @@ data class GameCandidate(val appId: String, val hSrc: String)
  * 上游 src/tasks.ts 的解析规则，逐条对齐：
  * - 账号必须与本地 heybox_id 一致，否则视为登录过期
  * - 只取 title 为「每日任务」的分组
- * - 分享任务 1/19/31 必须存在且状态为 waiting 或 finish
+ * - 只有本次要执行的分享任务（requiredShareIds）必须存在且状态为 waiting 或 finish；
+ *   关闭的分享任务不参与校验，避免上游调整任务列表时把纯签到也一起卡死
  */
 object TaskParser {
 
     val SHARE_IDS = listOf("1", "19", "31")
     val SHARE_NAMES = mapOf("1" to "分享帖子", "19" to "分享游戏", "31" to "分享游戏评价")
 
-    fun snapshot(root: JSONObject, account: String): TaskSnapshot {
+    fun snapshot(
+        root: JSONObject,
+        account: String,
+        requiredShareIds: Set<String> = emptySet(),
+    ): TaskSnapshot {
         val user = root.optJSONObject("user") ?: throw IllegalStateException("任务列表缺少 user 字段")
         val userid = user.opt("userid")?.toString().orEmpty()
         if (userid != account) throw SessionExpiredException()
@@ -72,7 +77,7 @@ object TaskParser {
             val id = item.optJSONObject("report_extra")?.opt("task_id")?.toString() ?: "sign"
             tasks += DailyTask(id = id, title = item.optString("title"), state = item.optString("state"))
         }
-        for (id in SHARE_IDS) {
+        for (id in requiredShareIds) {
             val task = tasks.firstOrNull { it.id == id }
                 ?: throw IllegalStateException("APP 任务 $id 缺失，请检查接口版本")
             if (task.state !in setOf("waiting", "finish")) {
