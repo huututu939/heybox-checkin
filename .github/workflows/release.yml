@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build signed APK & publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # 版本号与 tag 必须一致，避免 v1.4.1 的 tag 打出 1.4.0 的包
+      - name: Check version matches tag
+        run: |
+          VN=$(grep -m1 '^ *versionName' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+          echo "versionName=$VN tag=$GITHUB_REF_NAME"
+          if [ "v$VN" != "$GITHUB_REF_NAME" ]; then
+            echo "tag 与 versionName 不一致，先改 app/build.gradle.kts" >&2
+            exit 1
+          fi
+
+      - name: Restore signing config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PROPERTIES: ${{ secrets.KEYSTORE_PROPERTIES }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PROPERTIES" ]; then
+            echo "缺少 KEYSTORE_BASE64 / KEYSTORE_PROPERTIES，无法签名出包" >&2
+            exit 1
+          fi
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/heybox-release.jks
+          printf '%s\n' "$KEYSTORE_PROPERTIES" > keystore.properties
+
+      - name: Build release
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verify signature and manifest
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/$BT/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion):"
+
+      - name: Package artifacts
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk app-release.apk
+          sha256sum app-release.apk > app-release.apk.sha256
+          cat app-release.apk.sha256
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            app-release.apk app-release.apk.sha256 \
+            --title "盒签 $GITHUB_REF_NAME" \
+            --generate-notes

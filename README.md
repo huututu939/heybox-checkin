@@ -98,6 +98,8 @@ Windows 用 `gradlew.bat`，或在 `local.properties` 里写 `sdk.dir=...`。首
 
 要出正式包，在仓库根目录放 `keystore.properties` 与 `keystore/`，再执行 `./gradlew assembleRelease`。**keystore 丢了就无法给已安装的用户覆盖升级，务必备份。**
 
+仓库自身发版走 CI：推一个 `v*` tag 后，GitHub Actions 用 Secrets 里的 keystore 签名出包、校验签名与 versionCode、算 SHA-256，再自动建 Release。tag 与 `versionName` 对不上会直接失败。
+
 ## 许可
 
 本项目以 **MIT License** 发布，完整文本见 [LICENSE](LICENSE)。
