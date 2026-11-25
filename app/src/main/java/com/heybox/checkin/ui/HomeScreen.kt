@@ -76,6 +76,7 @@ import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
 import com.heybox.checkin.ui.theme.NumberTiny
+import com.heybox.checkin.ui.theme.glass
 import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
@@ -681,7 +682,7 @@ private fun Tile(name: String, state: String, modifier: Modifier, trailing: @Com
     Column(
         modifier = modifier
             .height(86.dp)
-            .background(Ink.surface, RoundedCornerShape(18.dp))
+            .glass(RoundedCornerShape(20.dp), raised = false)
             .padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -775,7 +776,10 @@ private fun DayCell(cell: WeekCell) {
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (cell.today) Ink.success.copy(alpha = 0.14f) else Ink.surface)
+                .background(
+                    if (cell.today) Ink.success.copy(alpha = 0.14f)
+                    else Ink.surface.copy(alpha = 0.5f),
+                )
                 .border(1.dp, if (cell.today) Ink.success.copy(alpha = 0.14f) else Ink.line, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
@@ -1062,7 +1066,7 @@ private fun Card(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(20.dp))
+            .glass(RoundedCornerShape(24.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
         content = content,
     )
@@ -1206,8 +1210,9 @@ private fun BottomBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Ink.canvas)
-            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .glass(RoundedCornerShape(28.dp))
+            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
     ) {
         if (showCta) {
             Button(
@@ -1343,7 +1348,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Ink.surface, RoundedCornerShape(20.dp))
+                .glass(RoundedCornerShape(24.dp))
                 .padding(horizontal = 18.dp, vertical = 2.dp),
         ) {
             cells.forEachIndexed { index, cell ->

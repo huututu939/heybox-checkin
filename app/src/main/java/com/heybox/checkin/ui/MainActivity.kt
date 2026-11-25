@@ -34,7 +34,7 @@ import com.heybox.checkin.core.SessionInfo
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.HeyboxTheme
-import com.heybox.checkin.ui.theme.Ink
+import com.heybox.checkin.ui.theme.GlassBackdrop
 import com.heybox.checkin.widget.Widget2x2Provider
 import com.heybox.checkin.widget.Widget4x1Provider
 import com.heybox.checkin.work.Scheduler
@@ -91,12 +91,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
             HeyboxTheme(darkTheme = dark) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Ink.canvas),
-                ) {
-                    App(
+                Box(modifier = Modifier.fillMaxSize()) {
+                    GlassBackdrop()
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        App(
                         store = store,
                         appearance = appearance,
                         darkTheme = dark,
@@ -109,6 +107,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
     }
 
     /**

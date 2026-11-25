@@ -41,6 +41,7 @@ import com.heybox.checkin.R
 import com.heybox.checkin.data.Diagnostics
 import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.ui.theme.Ink
+import com.heybox.checkin.ui.theme.glass
 import com.heybox.checkin.ui.theme.NumberSmall
 import kotlinx.coroutines.launch
 
@@ -67,7 +68,6 @@ fun AboutScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Ink.canvas)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp),
     ) {
@@ -340,7 +340,7 @@ private fun AboutCard(title: String, content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(20.dp))
+            .glass(RoundedCornerShape(24.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {

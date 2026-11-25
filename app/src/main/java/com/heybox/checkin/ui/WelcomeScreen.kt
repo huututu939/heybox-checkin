@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.ui.theme.Ink
+import com.heybox.checkin.ui.theme.glass
 import com.heybox.checkin.ui.theme.NumberSmall
 
 const val NOTICE_VERSION = 1
@@ -111,7 +112,7 @@ private fun NoticeBlock(index: String, title: String, body: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(20.dp))
+            .glass(RoundedCornerShape(24.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
         Row {

@@ -182,11 +182,13 @@ private fun schemeOf(p: Palette, dark: Boolean) = if (dark) {
 fun HeyboxTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     val palette = if (darkTheme) DarkPalette else LightPalette
     androidx.compose.runtime.CompositionLocalProvider(LocalPalette provides palette) {
-        MaterialTheme(
-            colorScheme = schemeOf(palette, darkTheme),
-            typography = HeyboxTypography,
-            shapes = HeyboxShapes,
-            content = content,
-        )
+        ProvideGlass(darkTheme) {
+            MaterialTheme(
+                colorScheme = schemeOf(palette, darkTheme),
+                typography = HeyboxTypography,
+                shapes = HeyboxShapes,
+                content = content,
+            )
+        }
     }
 }
