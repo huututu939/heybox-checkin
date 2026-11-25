@@ -81,11 +81,15 @@ import com.heybox.checkin.ui.theme.NumberStyle
 import com.heybox.checkin.ui.theme.NumberTiny
 import com.heybox.checkin.ui.theme.Glass
 import com.heybox.checkin.ui.theme.glass
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
@@ -245,12 +249,12 @@ fun HomeScreen(
         }
     }
 
-    val haze = remember { HazeState() }
+    val barBackdrop = rememberLayerBackdrop()
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = haze),
+                .layerBackdrop(barBackdrop),
         ) {
         when (tab) {
             HomeTab.Today -> TodayTab(
@@ -328,7 +332,7 @@ fun HomeScreen(
 
         BottomBar(
             modifier = Modifier.align(Alignment.BottomCenter),
-            hazeState = haze,
+            backdrop = barBackdrop,
             tab = tab,
             running = running,
             stage = stage,
@@ -1214,7 +1218,7 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun BottomBar(
     modifier: Modifier = Modifier,
-    hazeState: HazeState,
+    backdrop: LayerBackdrop,
     tab: HomeTab,
     running: Boolean,
     stage: String,
@@ -1229,21 +1233,23 @@ private fun BottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 12.dp)
-            .shadow(
-                14.dp,
-                RoundedCornerShape(30.dp),
-                clip = false,
-                ambientColor = Glass.palette.shadow,
-                spotColor = Glass.palette.shadow,
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { RoundedCornerShape(30.dp) },
+                effects = {
+                    vibrancy()
+                    blur(26.dp.toPx())
+                    lens(28.dp.toPx(), 56.dp.toPx())
+                },
+                highlight = { Highlight.Default },
+                shadow = { Shadow.Default },
             )
-            .clip(RoundedCornerShape(30.dp))
-            .hazeEffect(
-                state = hazeState,
-                style = HazeStyle(
-                    backgroundColor = Ink.canvas.copy(alpha = 0.35f),
-                    tints = listOf(HazeTint(Ink.surface.copy(alpha = 0.28f))),
-                    blurRadius = 26.dp,
-                    noiseFactor = 0.02f,
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Ink.surface.copy(alpha = 0.22f),
+                        Ink.canvas.copy(alpha = 0.30f),
+                    ),
                 ),
             )
             .border(

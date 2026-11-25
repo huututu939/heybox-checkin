@@ -35,6 +35,9 @@ import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.HeyboxTheme
 import com.heybox.checkin.ui.theme.GlassBackdrop
+import com.heybox.checkin.ui.theme.LocalBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.heybox.checkin.widget.Widget2x2Provider
 import com.heybox.checkin.widget.Widget4x1Provider
 import com.heybox.checkin.work.Scheduler
@@ -96,8 +99,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
             HeyboxTheme(darkTheme = dark) {
+                val bgBackdrop = rememberLayerBackdrop()
                 Box(modifier = Modifier.fillMaxSize()) {
-                    GlassBackdrop()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .layerBackdrop(bgBackdrop),
+                    ) {
+                        GlassBackdrop()
+                    }
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        LocalBackdrop provides bgBackdrop,
+                    ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         App(
                         store = store,
@@ -109,6 +122,7 @@ class MainActivity : ComponentActivity() {
                             appearance = mode
                         },
                     )
+                    }
                 }
             }
         }

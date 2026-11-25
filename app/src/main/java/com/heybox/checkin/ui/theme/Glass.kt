@@ -14,6 +14,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -84,6 +89,9 @@ val DarkGlass = GlassPalette(
 
 private val LocalGlass = staticCompositionLocalOf { LightGlass }
 
+/** 背景层的后景数据，卡片用它做折射；没有时退回纯半透明。 */
+val LocalBackdrop = staticCompositionLocalOf<com.kyant.backdrop.Backdrop?> { null }
+
 /** 跟随明暗切换玻璃参数。 */
 @Composable
 fun ProvideGlass(dark: Boolean, content: @Composable () -> Unit) {
@@ -146,11 +154,13 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     raised: Boolean = true,
-    boost: Float = 0f,
+    blurRadius: androidx.compose.ui.unit.Dp = 18.dp,
+    lensRadius: androidx.compose.ui.unit.Dp = 20.dp,
+    lensDepth: androidx.compose.ui.unit.Dp = 44.dp,
+    tintAlpha: Float = 0.30f,
 ): Modifier {
     val g = Glass.palette
-    val top = g.glassTop.copy(alpha = (g.glassTop.alpha + boost).coerceAtMost(0.95f))
-    val bottom = g.glassBottom.copy(alpha = (g.glassBottom.alpha + boost).coerceAtMost(0.95f))
+    val backdrop = LocalBackdrop.current
     return this
         .shadow(
             elevation = if (raised) 14.dp else 6.dp,
@@ -160,8 +170,30 @@ fun Modifier.glass(
             spotColor = g.shadow,
         )
         .clip(shape)
+        .then(
+            if (backdrop != null) {
+                drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { shape },
+                    effects = {
+                        vibrancy()
+                        blur(blurRadius.toPx())
+                        lens(lensRadius.toPx(), lensDepth.toPx())
+                    },
+                    highlight = { com.kyant.backdrop.highlight.Highlight.Default },
+                    shadow = { com.kyant.backdrop.shadow.Shadow.Default },
+                )
+            } else {
+                Modifier
+            },
+        )
         .background(
-            Brush.verticalGradient(colors = listOf(top, bottom)),
+            Brush.verticalGradient(
+                colors = listOf(
+                    g.glassTop.copy(alpha = g.glassTop.alpha * tintAlpha + 0.10f),
+                    g.glassBottom.copy(alpha = g.glassBottom.alpha * tintAlpha + 0.04f),
+                ),
+            ),
         )
         .border(
             width = 1.dp,

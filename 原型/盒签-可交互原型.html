@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-zcode-design>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>盒签 · 界面原型 v3</title>
+<style>
+  :root {
+    --canvas: #F4F3F0;
+    --surface: #FFFFFF;
+    --raised: #ECEAE5;
+    --line: #E4E1DA;
+    --ink: #15181A;
+    --muted: #6B7176;
+    --accent: #A05A12;
+    --on-accent: #FFF7EC;
+    --success: #2F7D57;
+    --danger: #A8452B;
+    --radius-card: 20px;
+    --radius-control: 14px;
+    --radius-pill: 100px;
+    --gap: 12px;
+    --pad: 20px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --page: #EDEBE7;
+
+    --glass-top: rgba(255, 255, 255, .82);
+    --glass-bottom: rgba(255, 255, 255, .58);
+    --glass-border: rgba(255, 255, 255, .65);
+    --glass-highlight: rgba(255, 255, 255, .55);
+    --glass-shadow: rgba(38, 30, 20, .10);
+    --blob-warm: rgba(243, 192, 123, .55);
+    --blob-cool: rgba(175, 195, 212, .50);
+    --blob-accent: rgba(232, 168, 124, .40);
+  }
+
+  [data-theme="dark"] {
+    --canvas: #0E1012;
+    --surface: #171A1C;
+    --raised: #202427;
+    --line: #2B3034;
+    --ink: #ECEEF0;
+    --muted: #9AA1A7;
+    --accent: #EFAE55;
+    --on-accent: #1A1206;
+    --success: #74C08D;
+    --danger: #E08D6C;
+    --page: #08090A;
+
+    --glass-top: rgba(255, 255, 255, .13);
+    --glass-bottom: rgba(255, 255, 255, .05);
+    --glass-border: rgba(255, 255, 255, .18);
+    --glass-highlight: rgba(255, 255, 255, .22);
+    --glass-shadow: rgba(0, 0, 0, .55);
+    --blob-warm: rgba(107, 74, 34, .85);
+    --blob-cool: rgba(34, 50, 61, .85);
+    --blob-accent: rgba(74, 42, 30, .80);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--page);
+    color: #16181A;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body { padding: 28px 24px 56px; }
+
+  .toolbar {
+    max-width: 1120px;
+    margin: 0 auto 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 22px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .toolbar h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2B2F33;
+  }
+
+  .toolbar h1 span {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #7C8388;
+    margin-left: 8px;
+  }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: #E2DFD9;
+    border-radius: 10px;
+  }
+
+  .group > button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #5C6368;
+    font: 500 12px/1 var(--font);
+    padding: 7px 11px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+
+  .group > button[aria-pressed="true"] {
+    background: #FFFFFF;
+    color: #16181A;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+  }
+
+  .stage {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .notes {
+    width: 268px;
+    flex: none;
+    padding-top: 8px;
+    color: #4B5156;
+    font-size: 12.5px;
+    line-height: 1.75;
+  }
+
+  .notes h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: #8A9096;
+  }
+
+  .notes p { margin: 0 0 12px; }
+  .notes strong { color: #23272A; font-weight: 600; }
+  .notes ul { margin: 0 0 16px; padding-left: 16px; }
+  .notes li { margin-bottom: 6px; }
+
+  /* ---------- 机身 ---------- */
+  .phone {
+    width: 390px;
+    height: 844px;
+    flex: none;
+    border-radius: 46px;
+    background:
+      radial-gradient(46% 34% at 98% -4%, var(--blob-warm), transparent 72%),
+      radial-gradient(50% 40% at -6% 46%, var(--blob-cool), transparent 74%),
+      radial-gradient(44% 34% at 100% 92%, var(--blob-accent), transparent 72%),
+      var(--canvas);
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 8px #1A1D1F,
+      0 0 0 9px #2E3336,
+      0 24px 48px rgba(0, 0, 0, .20);
+    transition: background .2s ease;
+  }
+
+  .statusbar {
+    height: 44px;
+    padding: 0 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .statusbar .glyphs { display: flex; align-items: center; gap: 6px; opacity: .9; }
+  .statusbar svg { display: block; }
+
+  .homebar {
+    position: absolute;
+    left: 50%;
+    bottom: 7px;
+    width: 132px;
+    height: 5px;
+    margin-left: -66px;
+    border-radius: 3px;
+    background: var(--ink);
+    opacity: .22;
+    z-index: 6;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 44px 0 0;
+    display: none;
+    color: var(--ink);
+  }
+
+  .screen[data-active="true"] { display: block; }
+
+  .scroll {
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: none;
+    padding: 6px var(--pad) 24px;
+  }
+
+  .scroll.with-bar { padding-bottom: 158px; }
+  .scroll.with-tab { padding-bottom: 112px; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* ---------- 通用 ---------- */
+  .card {
+    background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    padding: 18px;
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 10px 24px var(--glass-shadow);
+  }
+
+  .card + .card { margin-top: var(--gap); }
+
+  .label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .8px;
+    color: var(--muted);
+  }
+
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .divider { height: 1px; background: var(--line); margin: 14px 0; }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: var(--radius-control);
+    font: 600 15px/1 var(--font);
+    cursor: pointer;
+  }
+
+  .btn-primary { background: var(--ink); color: var(--canvas); }
+  .btn-ghost { background: var(--raised); color: var(--ink); }
+
+  .switch {
+    --w: 44px;
+    --h: 26px;
+    width: var(--w);
+    height: var(--h);
+    border-radius: var(--radius-pill);
+    background: var(--raised);
+    border: 1px solid var(--line);
+    position: relative;
+    flex: none;
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease;
+  }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: transform .16s ease, background .16s ease;
+  }
+
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"]::after { transform: translateX(18px); background: var(--on-accent); }
+
+  .link {
+    font-size: 12.5px;
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* ---------- 今天 ---------- */
+  .topline {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 4px 2px 0;
+  }
+
+  .topline .brand { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+
+  .topline .account {
+    margin-top: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    cursor: pointer;
+    border: 0;
+  }
+
+  .status { display: flex; align-items: center; gap: 9px; margin-top: 16px; }
+
+  .status .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+
+  .status[data-kind="idle"] .dot { background: var(--muted); }
+  .status[data-kind="running"] .dot {
+    background: var(--accent);
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: .35; }
+    50% { opacity: 1; }
+  }
+
+  .status .word { font-size: 27px; font-weight: 700; letter-spacing: -.6px; }
+  .status .date { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 12px;
+  }
+
+  .figure { padding-left: 14px; position: relative; }
+  .figure:first-child { padding-left: 0; }
+  .figure + .figure::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: var(--line);
+  }
+
+  .figure .v {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 25px;
+    font-weight: 500;
+    letter-spacing: -.6px;
+  }
+
+  .figure .n { margin-top: 3px; font-size: 11px; color: var(--muted); }
+
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+    padding: 13px 14px;
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+
+  .banner[hidden] { display: none; }
+
+  .banner .t { font-size: 13px; font-weight: 600; color: var(--danger); }
+  .banner .s { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+
+  .group-label {
+    margin: 22px 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .8px;
+    color: var(--muted);
+  }
+
+  .group-label:first-child { margin-top: 0; }
+
+  .balance-line {
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  /* 随机窗口时间轴 */
+  .window-block { margin-top: 18px; }
+
+  .window-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .window-head .next {
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: -.2px;
+  }
+
+  .track {
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 18%, var(--raised));
+  }
+
+  .track .fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 62%;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+  }
+
+  .track .marker {
+    position: absolute;
+    top: 50%;
+    left: 62%;
+    width: 11px;
+    height: 11px;
+    margin: -5.5px 0 0 -5.5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--canvas);
+  }
+
+  .track-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  .section { margin-top: 20px; }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  /* 2×2 任务方块 */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .tile {
+    background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 18px var(--glass-shadow);
+    min-height: 86px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .tile .name { font-size: 14px; font-weight: 500; }
+
+  .tile .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .tile .state { font-size: 11.5px; color: var(--muted); }
+  .tile .state.done { color: var(--success); }
+
+  .tile .tick {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+  }
+
+  .tile .switch { --w: 36px; --h: 22px; }
+  .tile .switch::after { width: 14px; height: 14px; }
+  .tile .switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+  /* 最近七天 */
+  .week { display: flex; justify-content: space-between; }
+
+  .day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 38px;
+  }
+
+  .day .w { font-size: 10px; color: var(--muted); }
+  .day .d { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  .day .cell {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: var(--glass-top);
+    border: 1px solid var(--glass-border);
+    color: var(--muted);
+  }
+
+  .day.today .cell {
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    color: var(--success);
+  }
+
+  .day.empty .cell { background: transparent; border: 1px dashed var(--line); }
+
+  /* 底部操作区 */
+  .bottom {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 14px 30px var(--glass-shadow);
+    z-index: 5;
+  }
+
+  .bottom::before { content: none; }
+
+  .tabbar { display: flex; justify-content: space-around; padding-top: 10px; margin-top: 8px; }
+
+  .tab {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font: 500 10.5px/1 var(--font);
+    padding: 4px 14px;
+    cursor: pointer;
+  }
+
+  .tab[aria-pressed="true"] { color: var(--ink); }
+
+  /* ---------- 设置 ---------- */
+  .page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 4px 2px 16px;
+  }
+
+  .page-head h2 { margin: 0; font-size: 27px; font-weight: 700; letter-spacing: -.6px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 13px 0;
+  }
+
+  .row + .row { border-top: 1px solid var(--line); }
+
+  .row .title { font-size: 14.5px; font-weight: 500; }
+  .row .sub { margin-top: 3px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
+  .row-tap { cursor: pointer; }
+
+  .chev { color: var(--muted); display: flex; }
+
+  .steppers { display: flex; gap: 10px; margin-top: 12px; }
+
+  .stepper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px;
+    background: var(--raised);
+    border-radius: var(--radius-control);
+  }
+
+  .stepper button {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--ink);
+    font: 500 16px/1 var(--font);
+    cursor: pointer;
+  }
+
+  .stepper .mid { text-align: center; }
+  .stepper .mid .t { font-family: var(--mono); font-size: 14px; }
+  .stepper .mid .n { margin-top: 2px; font-size: 9px; color: var(--muted); }
+
+  .segmented {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--raised);
+    border-radius: var(--radius-control);
+  }
+
+  .segmented button {
+    flex: 1;
+    height: 34px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font: 500 13px/1 var(--font);
+    cursor: pointer;
+  }
+
+  .segmented button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+  }
+
+  .note {
+    font-size: 11px;
+    line-height: 1.65;
+    color: var(--muted);
+    margin: 10px 0 0;
+  }
+
+  .dot-row {
+    padding: 11px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .dot-row + .dot-row { border-top: 1px solid var(--line); }
+  .dot-row .left { display: flex; align-items: flex-start; gap: 10px; }
+  .dot-row .left .dot { margin-top: 7px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex: none; }
+  .dot.warn { background: var(--accent); }
+
+  /* ---------- 记录 ---------- */
+  .record-row {
+    display: grid;
+    grid-template-columns: 54px 1fr 18px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+  }
+
+  .record-row + .record-row { border-top: 1px solid var(--line); }
+
+  .record-row .when .d { font-family: var(--mono); font-size: 13.5px; }
+  .record-row .when .w { margin-top: 2px; font-size: 10px; color: var(--muted); }
+
+  .record-row .what .main { font-size: 12.5px; }
+  .record-row .what .sub { margin-top: 3px; font-size: 11px; color: var(--muted); }
+
+  .record-row .mark { color: var(--success); display: grid; place-items: center; }
+  .record-row.skipped .what .main { color: var(--muted); }
+  .record-row.skipped .mark { color: var(--line); }
+
+  /* ---------- 小组件 ---------- */
+  .widgets { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+
+  .widget-wrap {
+    border-radius: 22px;
+    padding: 18px;
+    background: var(--raised);
+  }
+
+  .widget {
+    color: var(--ink);
+    background: var(--surface);
+    border-radius: 20px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+  }
+
+  .widget .w-title { font-size: 13px; font-weight: 600; }
+  .widget .w-state { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  .widget .w-state.done { color: var(--success); }
+
+  .widget .w-btn {
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--ink);
+    color: var(--canvas);
+    font: 600 11.5px/1 var(--font);
+    cursor: pointer;
+  }
+
+  /* ---------- 登录 / 首启 / 关于 ---------- */
+  .page-pad { padding: 10px 2px 0; }
+
+  .logomark { display: flex; align-items: center; gap: 12px; }
+
+  .logomark .cube {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: var(--accent);
+    color: var(--on-accent);
+    display: grid;
+    place-items: center;
+    font-size: 19px;
+    font-weight: 700;
+  }
+
+  .logomark .meta .kicker { font-size: 10px; letter-spacing: 1.6px; color: var(--muted); }
+  .logomark .meta .sub { margin-top: 3px; font-size: 12px; }
+
+  .page-title { margin: 26px 0 0; font-size: 34px; font-weight: 700; letter-spacing: -.8px; }
+  .page-lead { margin: 10px 0 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+
+  .step-head { display: flex; align-items: center; gap: 10px; margin: 34px 0 10px; }
+  .step-head .idx { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .step-head .rule { width: 18px; height: 1px; background: var(--line); }
+  .step-head .name { font-size: 11px; letter-spacing: .8px; color: var(--muted); }
+
+  .field {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    font-size: 15px;
+    color: var(--muted);
+  }
+
+  .field.mono { font-family: var(--mono); letter-spacing: 2px; }
+  .helper { margin: 10px 0 14px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+
+  .welcome-card { padding: 18px; }
+  .welcome-card .num { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 6px; }
+  .welcome-card h3 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+  .welcome-card p { margin: 0; font-size: 12.5px; line-height: 1.75; color: var(--muted); }
+
+  .about-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 6px 0;
+  }
+
+  .about-version { font-family: var(--mono); font-size: 15px; }
+  .about-list { display: flex; flex-direction: column; gap: 14px; }
+  .about-list .item .name { font-size: 15px; font-weight: 600; }
+  .about-list .item .url {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .about-list .item .lic { margin-top: 2px; font-size: 11px; color: var(--muted); }
+
+  .by { margin-top: 30px; font-size: 20px; font-weight: 600; }
+
+  body.plain .toolbar, body.plain .notes { display: none; }
+  body.plain { padding: 24px 0; }
+  body.plain .stage { justify-content: center; }
+
+  @media (max-width: 860px) {
+    .stage { flex-direction: column; align-items: center; }
+    .notes { width: 390px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>盒签 · 界面原型<span>v4 / 补全状态与页面</span></h1>
+  <div class="controls">
+    <div class="group" role="group" aria-label="界面">
+      <button data-screen-btn="today" aria-pressed="true">今天</button>
+      <button data-screen-btn="settings" aria-pressed="false">设置</button>
+      <button data-screen-btn="login" aria-pressed="false">登录</button>
+      <button data-screen-btn="welcome" aria-pressed="false">首启</button>
+      <button data-screen-btn="record" aria-pressed="false">记录</button>
+      <button data-screen-btn="widget" aria-pressed="false">小组件</button>
+      <button data-screen-btn="about" aria-pressed="false">关于</button>
+    </div>
+    <div class="group" role="group" aria-label="状态">
+      <button data-state-btn="done" aria-pressed="true">已完成</button>
+      <button data-state-btn="pending" aria-pressed="false">待执行</button>
+      <button data-state-btn="running" aria-pressed="false">执行中</button>
+      <button data-state-btn="expired" aria-pressed="false">已过期</button>
+    </div>
+    <div class="group" role="group" aria-label="主题">
+      <button data-theme-btn="light" aria-pressed="true">白天</button>
+      <button data-theme-btn="dark" aria-pressed="false">夜间</button>
+    </div>
+  </div>
+</div>
+
+<main class="stage">
+  <div class="phone" id="phone" data-theme="light">
+
+    <div class="statusbar">
+      <span class="mono">9:41</span>
+      <span class="glyphs">
+        <svg width="17" height="11" viewBox="0 0 17 11" fill="none" aria-hidden="true">
+          <rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/>
+          <rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/>
+          <rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/>
+          <rect x="13.5" y="0" width="3" height="11" rx="1" fill="currentColor"/>
+        </svg>
+        <svg width="16" height="11" viewBox="0 0 16 11" fill="none" aria-hidden="true">
+          <path d="M8 9.4 1 3.6C2.9 1.9 5.3 1 8 1s5.1.9 7 2.6L8 9.4Z" fill="currentColor"/>
+        </svg>
+        <svg width="25" height="11" viewBox="0 0 25 11" fill="none" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="21" height="10" rx="3" stroke="currentColor" opacity=".4"/>
+          <rect x="2" y="2" width="16" height="7" rx="1.6" fill="currentColor"/>
+          <path d="M23 4v3c1-.3 1.6-.8 1.6-1.5S24 4.3 23 4Z" fill="currentColor" opacity=".4"/>
+        </svg>
+      </span>
+    </div>
+
+    <!-- ============ 今天 ============ -->
+    <section class="screen" data-for="today" data-active="true">
+      <div class="scroll with-bar">
+        <div class="topline">
+          <div>
+            <div class="brand">盒签</div>
+            <div class="account">heybox_id 100000000</div>
+          </div>
+        </div>
+
+        <div class="banner" id="expired-banner" hidden>
+          <div>
+            <div class="t">登录已过期</div>
+            <div class="s">自动签到会一直失败，重新登录即可恢复</div>
+          </div>
+          <span class="link">重新登录</span>
+        </div>
+
+        <div class="status" id="status">
+          <span class="dot"></span>
+          <span class="word" id="status-word">今日已完成</span>
+          <span class="date">11月25日 星期三</span>
+        </div>
+
+        <div class="label" style="margin-top:18px">今日到账</div>
+        <div class="figures" style="margin-top:6px">
+          <div class="figure"><div class="v" data-stat="0">+90</div><div class="n">经验</div></div>
+          <div class="figure"><div class="v" data-stat="1">+300</div><div class="n">H 币</div></div>
+          <div class="figure"><div class="v" data-stat="2">+1</div><div class="n">电池</div></div>
+        </div>
+        <div class="balance-line">余额 H 币 766 · 电池 5 · Lv 3 170/200</div>
+
+        <div class="window-block">
+          <div class="window-head">
+            <span class="label">下次执行</span>
+            <span class="next" id="next-at">11月26日 17:14</span>
+          </div>
+          <div class="track">
+            <div class="marker" id="track-marker"></div>
+          </div>
+          <div class="track-scale"><span>08:00</span><span>随机窗口</span><span>20:00</span></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <span class="label">每日四件</span>
+            <span class="label" id="tasks-hint" style="letter-spacing:0">今天</span>
+          </div>
+          <div class="tiles">
+            <div class="tile">
+              <div class="name">签到</div>
+              <div class="foot">
+                <span class="state" data-task="sign">已完成</span>
+                <span class="tick" data-tick="sign">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <path d="M1.6 5.8 4.2 8.4 9.4 2.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="tile">
+              <div class="name">分享帖子</div>
+              <div class="foot">
+                <span class="state" data-task="1">已完成</span>
+                <span class="switch" role="switch" aria-checked="true" tabindex="0"></span>
+              </div>
+            </div>
+            <div class="tile">
+              <div class="name">分享游戏</div>
+              <div class="foot">
+                <span class="state" data-task="19">已完成</span>
+                <span class="switch" role="switch" aria-checked="true" tabindex="0"></span>
+              </div>
+            </div>
+            <div class="tile">
+              <div class="name">分享游戏评价</div>
+              <div class="foot">
+                <span class="state" data-task="31">已完成</span>
+                <span class="switch" role="switch" aria-checked="true" tabindex="0"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <span class="label">最近七天</span>
+            <span class="link" data-screen-btn="record">全部记录</span>
+          </div>
+          <div class="week">
+            <div class="day"><span class="w">四</span><span class="cell">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6.4 4.6 9 10 3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span><span class="d">11/19</span></div>
+            <div class="day"><span class="w">五</span><span class="cell">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6.4 4.6 9 10 3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span><span class="d">11/20</span></div>
+            <div class="day empty"><span class="w">六</span><span class="cell">–</span><span class="d">11/21</span></div>
+            <div class="day"><span class="w">日</span><span class="cell">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6.4 4.6 9 10 3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span><span class="d">11/22</span></div>
+            <div class="day"><span class="w">一</span><span class="cell">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6.4 4.6 9 10 3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span><span class="d">11/23</span></div>
+            <div class="day empty"><span class="w">二</span><span class="cell">–</span><span class="d">11/24</span></div>
+            <div class="day today"><span class="w">三</span><span class="cell">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6.4 4.6 9 10 3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span><span class="d">11/25</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <button class="btn btn-primary" id="run-btn">立即执行一次</button>
+        <div class="tabbar">
+          <button class="tab" data-screen-btn="today" aria-pressed="true">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect x="2.5" y="3.5" width="15" height="14" rx="4" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6.5 2.5v2.6M13.5 2.5v2.6M6.6 10.4l2.2 2.2 4.4-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            今天
+          </button>
+          <button class="tab" data-screen-btn="settings" aria-pressed="false">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M3.5 6.5h13M3.5 13.5h13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7.5" cy="6.5" r="2" fill="var(--canvas)" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="13" cy="13.5" r="2" fill="var(--canvas)" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            设置
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section class="screen" data-for="settings">
+      <div class="scroll with-tab">
+        <div class="page-head">
+          <h2>设置</h2>
+          <span class="label">3/3 权限就绪</span>
+        </div>
+
+        <div class="group-label">自动</div>
+        <div class="card">
+          <div class="row" style="padding-top:2px;border:0">
+            <div>
+              <div class="title">每天自动签到</div>
+              <div class="sub">下次 11月26日 17:14 · 每天重新随机</div>
+            </div>
+            <span class="switch" role="switch" aria-checked="true" tabindex="0"></span>
+          </div>
+          <div class="divider"></div>
+          <div class="row" style="padding:0;border:0">
+            <span class="label">执行时段</span>
+            <span class="mono" style="font-size:14px">08:00 → 20:00</span>
+          </div>
+          <div class="steppers">
+            <div class="stepper">
+              <button aria-label="减一小时">−</button>
+              <div class="mid"><div class="t">08:00</div><div class="n">开始</div></div>
+              <button aria-label="加一小时">+</button>
+            </div>
+            <div class="stepper">
+              <button aria-label="减一小时">−</button>
+              <div class="mid"><div class="t">20:00</div><div class="n">结束</div></div>
+              <button aria-label="加一小时">+</button>
+            </div>
+          </div>
+          <p class="note">每天在时段内随机挑一刻，不会固定在同一个时间；改完立即重排。</p>
+        </div>
+
+        <div class="group-label">值守</div>
+        <div class="card">
+          <div class="label" style="margin-bottom:2px">值守条件</div>
+          <div class="dot-row">
+            <div class="left"><span class="dot"></span><span class="title" style="font-size:14px">通知权限</span></div>
+            <span class="state" style="font-size:12px;color:var(--muted)">已就绪</span>
+          </div>
+          <div class="dot-row">
+            <div class="left"><span class="dot"></span><span class="title" style="font-size:14px">忽略电池优化</span></div>
+            <span class="state" style="font-size:12px;color:var(--muted)">已就绪</span>
+          </div>
+          <div class="dot-row">
+            <div class="left"><span class="dot"></span><span class="title" style="font-size:14px">精确闹钟</span></div>
+            <span class="state" style="font-size:12px;color:var(--muted)">已就绪</span>
+          </div>
+          <div class="dot-row">
+            <div class="left">
+              <span class="dot warn"></span>
+              <div>
+                <div class="title" style="font-size:14px">自启动 / 后台运行</div>
+                <div class="sub">系统读不到这个开关，只能自己去确认</div>
+              </div>
+            </div>
+            <span class="link">去设置</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="padding-top:2px;border:0">
+            <div>
+              <div class="title">最近任务隐藏</div>
+              <div class="sub">离开时结束任务，多任务里不留卡片</div>
+            </div>
+            <span class="switch" role="switch" aria-checked="true" tabindex="0"></span>
+          </div>
+          <p class="note">开启前先锁定卡片，否则卡片消失时系统可能连带回收进程，定时闹钟也会失效。</p>
+        </div>
+
+        <div class="group-label">显示</div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">外观</div>
+          <div class="segmented" id="appearance-seg">
+            <button aria-pressed="true">跟随系统</button>
+            <button aria-pressed="false">白天</button>
+            <button aria-pressed="false">夜间</button>
+          </div>
+        </div>
+
+        <div class="group-label">其他</div>
+        <div class="card">
+          <div class="row row-tap" style="padding-top:2px;border:0">
+            <div class="title">关于盒签</div>
+            <span class="chev">
+              <svg width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+                <path d="M1.5 1.5 6.5 6.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <div class="row row-tap">
+            <div class="title">退出登录</div>
+            <span class="chev">
+              <svg width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+                <path d="M1.5 1.5 6.5 6.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <p class="note" style="margin-top:6px">盒签 v1.4.2</p>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="tabbar">
+          <button class="tab" data-screen-btn="today" aria-pressed="false">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect x="2.5" y="3.5" width="15" height="14" rx="4" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6.5 2.5v2.6M13.5 2.5v2.6M6.6 10.4l2.2 2.2 4.4-4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            今天
+          </button>
+          <button class="tab" data-screen-btn="settings" aria-pressed="true">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M3.5 6.5h13M3.5 13.5h13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7.5" cy="6.5" r="2" fill="var(--canvas)" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="13" cy="13.5" r="2" fill="var(--canvas)" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            设置
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 登录 ============ -->
+    <section class="screen" data-for="login">
+      <div class="scroll page-pad">
+        <div class="logomark">
+          <div class="cube">盒</div>
+          <div class="meta">
+            <div class="kicker">HEYBOX DAILY</div>
+            <div class="sub">备用机值守 · 自建</div>
+          </div>
+        </div>
+
+        <h1 class="page-title">盒签</h1>
+        <p class="page-lead">小黑盒每日签到，交给这台备用机。<br>设好一次，之后只在通知里看结果。</p>
+
+        <div class="step-head"><span class="idx">01</span><span class="rule"></span><span class="name">手机号</span></div>
+        <div class="field">接收短信的手机号</div>
+        <p class="helper">这台机器没有卡。点获取验证码后，用主手机收短信，再把 6 位数字填到第二步。</p>
+        <button class="btn btn-ghost">获取验证码</button>
+
+        <div class="step-head"><span class="idx">02</span><span class="rule"></span><span class="name">短信验证码</span></div>
+        <div class="field mono">6 位数字</div>
+        <div style="height:14px"></div>
+        <button class="btn btn-primary">登录这台设备</button>
+
+        <p class="note" style="margin-top:26px">登录会把手机端小黑盒挤下线一次，重新登录手机端即可。</p>
+      </div>
+    </section>
+
+    <!-- ============ 首启 ============ -->
+    <section class="screen" data-for="welcome">
+      <div class="scroll page-pad">
+        <div class="label" style="padding:4px 0 14px">盒签</div>
+        <h1 class="page-title" style="margin-top:0">开始之前</h1>
+        <p class="page-lead">三件事，看完再决定要不要用。</p>
+
+        <div class="stack" style="margin-top:20px">
+          <div class="card welcome-card">
+            <div class="num">01</div>
+            <h3>它替你做什么</h3>
+            <p>每天在设定的时段里挑一个随机时间，自动完成小黑盒签到。签到固定执行；分享任务默认全部关闭，要的话到首页逐个打开。</p>
+          </div>
+          <div class="card welcome-card">
+            <div class="num">02</div>
+            <h3>数据留在哪</h3>
+            <p>手机号、pkey 与设备标识只加密存在这台手机上；签到请求直接发往小黑盒官方接口。登录时会加载官方设备指纹组件（static.portal101.cn，源码带 SHA-256 校验）；没有中转服务器、没有统计 SDK，也不读取通讯录、相册与位置。</p>
+          </div>
+          <div class="card welcome-card">
+            <div class="num">03</div>
+            <h3>你要承担的</h3>
+            <p>这是非官方工具，与官方无任何关联或授权。账号被风控、奖励异常的风险由使用者自行承担；请勿用于代签、售卖。若要发给别人，请自行确认平台协议与当地法规。</p>
+          </div>
+        </div>
+
+        <p class="note" style="margin-top:18px">登录后建议到「设置 → 值守条件」把自启动、电池白名单和精确闹钟都打开，否则国产系统会在后台把定时任务清掉。</p>
+        <button class="btn btn-primary" style="margin-top:16px">我已了解，开始使用</button>
+        <p class="note" style="margin-top:12px;font-size:10.5px">继续即表示你已阅读并理解以上说明 · v1.4.2</p>
+      </div>
+    </section>
+
+    <!-- ============ 关于 ============ -->
+    <section class="screen" data-for="about">
+      <div class="scroll page-pad">
+        <div class="about-back">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M7.5 1.5 3 6l4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          返回
+        </div>
+        <h1 class="page-title" style="margin-top:14px">关于</h1>
+        <p class="page-lead">盒签 · 小黑盒每日自动签到</p>
+
+        <div class="card" style="margin-top:18px">
+          <div class="label">版本</div>
+          <div class="about-version" style="margin-top:8px">v1.4.2（build 16）</div>
+          <p class="note">协议层直调官方接口，不跑 Docker、不做无障碍点击；签到数据不经过任何第三方托管，登录时仅加载官方设备指纹组件。</p>
+          <div style="margin-top:10px"><span class="link">检查更新</span></div>
+        </div>
+
+        <div class="card">
+          <div class="label">参考项目</div>
+          <div class="about-list" style="margin-top:12px">
+            <div class="item">
+              <div class="name">heybox-daily</div>
+              <div class="url">github.com/Cansiny0320/heybox-daily</div>
+              <div class="lic">MIT License</div>
+            </div>
+            <div class="item">
+              <div class="name">heybox-core</div>
+              <div class="url">github.com/XiaHouSheng/heybox-core</div>
+              <div class="lic">MIT License</div>
+            </div>
+          </div>
+          <p class="note">本项目的签到 / 分享流程、请求签名与设备指纹实现参考并移植自这两个项目。</p>
+          <div style="margin-top:10px"><span class="link">查看完整开源许可 →</span></div>
+        </div>
+
+        <div class="card">
+          <div class="label">免责声明</div>
+          <p class="note">· 本工具为非官方客户端，与小黑盒官方无任何关联或授权。<br>· 仅供个人学习，请勿用于代签、售卖等商业行为。<br>· 因使用本工具产生的账号风险或数据异常，由使用者自行承担。</p>
+        </div>
+
+        <div class="card">
+          <div class="label">遇到问题</div>
+          <p class="note">复制下面这段环境信息发给我，比截图更好定位问题。不含账号凭据。</p>
+          <div style="margin-top:10px"><span class="link">复制诊断信息</span></div>
+        </div>
+
+        <div class="by">By 胡图图</div>
+      </div>
+    </section>
+
+    <!-- ============ 记录 ============ -->
+    <section class="screen" data-for="record">
+      <div class="scroll page-pad">
+        <div class="about-back" data-screen-btn="today">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M7.5 1.5 3 6l4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          返回
+        </div>
+        <h1 class="page-title" style="margin-top:14px">记录</h1>
+        <p class="page-lead">最近七天 · 完成 5 天，跳过 1 天</p>
+
+        <div class="card" style="margin-top:18px;padding:2px 18px">
+          <div class="record-row">
+            <div class="when"><div class="d">11/25</div><div class="w">周三</div></div>
+            <div class="what">
+              <div class="main">经验 +90 · H 币 +300 · 电池 +1</div>
+              <div class="sub">09:10 执行 · 三个分享任务已开</div>
+            </div>
+            <span class="mark">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2 7l3.2 3.2L11 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <div class="record-row skipped">
+            <div class="when"><div class="d">11/24</div><div class="w">周二</div></div>
+            <div class="what">
+              <div class="main">未执行（已由其它入口完成）</div>
+              <div class="sub">检测到当日已签到，没有重复执行</div>
+            </div>
+            <span class="mark">–</span>
+          </div>
+          <div class="record-row">
+            <div class="when"><div class="d">11/23</div><div class="w">周一</div></div>
+            <div class="what">
+              <div class="main">经验 +90 · H 币 +300 · 电池 +1</div>
+              <div class="sub">14:32 执行</div>
+            </div>
+            <span class="mark">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2 7l3.2 3.2L11 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <div class="record-row">
+            <div class="when"><div class="d">11/22</div><div class="w">周日</div></div>
+            <div class="what">
+              <div class="main">经验 +90 · H 币 +300 · 电池 +1</div>
+              <div class="sub">11:05 执行</div>
+            </div>
+            <span class="mark">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2 7l3.2 3.2L11 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <div class="record-row skipped">
+            <div class="when"><div class="d">11/21</div><div class="w">周六</div></div>
+            <div class="what">
+              <div class="main">未执行</div>
+              <div class="sub">当天没有记录</div>
+            </div>
+            <span class="mark">–</span>
+          </div>
+          <div class="record-row">
+            <div class="when"><div class="d">11/20</div><div class="w">周五</div></div>
+            <div class="what">
+              <div class="main">经验 +90 · H 币 +300 · 电池 +1</div>
+              <div class="sub">19:48 执行</div>
+            </div>
+            <span class="mark">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2 7l3.2 3.2L11 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+          <div class="record-row">
+            <div class="when"><div class="d">11/19</div><div class="w">周四</div></div>
+            <div class="what">
+              <div class="main">经验 +80 · H 币 +300 · 电池 +1</div>
+              <div class="sub">08:26 执行</div>
+            </div>
+            <span class="mark">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2 7l3.2 3.2L11 3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 小组件 ============ -->
+    <section class="screen" data-for="widget">
+      <div class="scroll page-pad">
+        <h1 class="page-title" style="margin-top:0;font-size:26px">桌面小组件</h1>
+        <p class="page-lead">4×1 形态，跟随明暗两套配色。</p>
+
+        <div class="widgets">
+          <div class="widget-wrap">
+            <div class="widget" data-theme="light">
+              <div>
+                <div class="w-title">盒签</div>
+                <div class="w-state done">已签到 · 下次 11/26 17:14</div>
+              </div>
+              <button class="w-btn">签到</button>
+            </div>
+          </div>
+          <div class="widget-wrap">
+            <div class="widget" data-theme="dark">
+              <div>
+                <div class="w-title">盒签</div>
+                <div class="w-state done">已签到 · 下次 11/26 17:14</div>
+              </div>
+              <button class="w-btn">签到</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">点文字区打开 App；「签到」直接把前台服务拉起来，和失败通知里的「立即重试」是同一条路径。登录过期时状态行改成「登录已过期 · 点击重新登录」。</p>
+      </div>
+    </section>
+
+    <div class="homebar"></div>
+  </div>
+
+  <aside class="notes">
+    <h2>结构上的改动</h2>
+    <p><strong>首页拆成两个页签。</strong> 「今天」只放状态、三个数字、下次时间、四个任务、七天记录；自动签到、值守条件、外观、关于全部移到「设置」。原来一页七个区块的长列表没有了。</p>
+    <p><strong>「今天」一屏放得下。</strong> 去掉卡片边框后，状态、数字、时间轴、四格任务和七天条刚好占满 390×844，不用滚动就能看完今天的情况。</p>
+    <p><strong>随机窗口变成时间轴。</strong> 08:00–20:00 画成一条轨道，按时段比例标记下次执行时刻；比一行「下一次 11月26日 17:14」更能说明「随机」这件事。</p>
+    <p><strong>四个任务改成 2×2 方块。</strong> 原来四行文字列表，现在四个方块，分享各自带开关，签到用勾选徽标；一眼能看出哪几件做了。</p>
+    <p><strong>七天记录改成七格条。</strong> 一行七天，有记录的格子打勾，跳过的显示短横，今天高亮；比列表更省空间，也更容易看出连续性。</p>
+    <p><strong>补了两个界面。</strong> 点「全部记录」进入按天明细（执行时间、增量、跳过原因）；小组件单独一页，展示 4×1 的明暗两套。</p>
+    <p><strong>补了过期态。</strong> 顶部一条「登录已过期」，主按钮变「重新登录」，数字归零为横线——这是用户最容易遇到、原设计里却只在角落提示的状态。</p>
+    <p><strong>设置分了三组。</strong> 自动 / 值守 / 显示 / 其他，靠小标题分区，不用一条条读才知道哪块是权限、哪块是外观。</p>
+    <p style="color:#8A9096">原型里的账号、余额与记录均为演示数据。</p>
+    <h2>保留的部分</h2>
+    <ul>
+      <li>配色与字体：中性底 + 单一琥珀强调色，数字等宽，标题无衬线。</li>
+      <li>登录 / 首启 / 关于仍是独立整页，文案不变。</li>
+      <li>主按钮固定在底部，滚动时始终可点。</li>
+    </ul>
+  </aside>
+</main>
+
+<script>
+  (function () {
+    var phone = document.getElementById('phone');
+    var screens = document.querySelectorAll('.screen');
+    var topBtns = document.querySelectorAll('.group [data-screen-btn]');
+
+    function press(list, active) {
+      list.forEach(function (b) { b.setAttribute('aria-pressed', String(b === active)); });
+    }
+
+    function go(name) {
+      screens.forEach(function (s) { s.dataset.active = String(s.dataset.for === name); });
+      document.querySelectorAll('.tabbar [data-screen-btn]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.screenBtn === name));
+      });
+      var top = document.querySelector('.group [data-screen-btn="' + name + '"]');
+      if (top) press(topBtns, top);
+    }
+
+    document.querySelectorAll('[data-screen-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () { go(btn.dataset.screenBtn); });
+    });
+
+    var status = document.getElementById('status');
+    var statusWord = document.getElementById('status-word');
+    var tasksHint = document.getElementById('tasks-hint');
+    var runBtn = document.getElementById('run-btn');
+    var stats = document.querySelectorAll('[data-stat]');
+    var taskStates = document.querySelectorAll('[data-task]');
+    var ticks = document.querySelectorAll('[data-tick]');
+    var nextAt = document.getElementById('next-at');
+    var trackMarker = document.getElementById('track-marker');
+    var banner = document.getElementById('expired-banner');
+
+    var copy = {
+      done: {
+        word: '今日已完成', kind: 'done', stats: ['+90', '+300', '+1'],
+        hint: '今天', task: '已完成', btn: '立即执行一次',
+        next: '11月26日 17:14', mark: 77
+      },
+      pending: {
+        word: '今日待执行', kind: 'idle', stats: ['—', '—', '—'],
+        hint: '今天 · 尚未执行', task: '—', btn: '立即执行一次',
+        next: '今天 13:41', mark: 47
+      },
+      running: {
+        word: '执行中', kind: 'running', stats: ['—', '—', '—'],
+        hint: '今天', task: '待执行', btn: '执行中…',
+        next: '今天 13:41', mark: 47
+      },
+      expired: {
+        word: '今日待执行', kind: 'idle', stats: ['—', '—', '—'],
+        hint: '今天 · 尚未执行', task: '—', btn: '重新登录',
+        next: '今天 13:41', mark: 47, expired: true
+      }
+    };
+
+    function setState(name) {
+      var c = copy[name];
+      statusWord.textContent = c.word;
+      status.dataset.kind = c.kind;
+      tasksHint.textContent = c.hint;
+      runBtn.textContent = c.btn;
+      nextAt.textContent = c.next;
+      trackMarker.style.left = c.mark + '%';
+      if (banner) banner.hidden = !c.expired;
+      stats.forEach(function (el, i) { el.textContent = c.stats[i]; });
+      taskStates.forEach(function (el) {
+        el.textContent = c.task;
+        el.classList.toggle('done', name === 'done');
+      });
+      ticks.forEach(function (el) { el.style.display = name === 'done' ? 'grid' : 'none'; });
+    }
+
+    var stateBtns = document.querySelectorAll('[data-state-btn]');
+    stateBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setState(btn.dataset.stateBtn);
+        press(stateBtns, btn);
+      });
+    });
+
+    var themeBtns = document.querySelectorAll('[data-theme-btn]');
+    function applyTheme(theme) {
+      phone.dataset.theme = theme;
+      press(themeBtns, phone.querySelector('[data-theme-btn="' + theme + '"]'));
+      var seg = document.querySelectorAll('#appearance-seg button');
+      press(seg, seg[theme === 'dark' ? 2 : 1]);
+    }
+
+    themeBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () { applyTheme(btn.dataset.themeBtn); });
+    });
+
+    document.querySelectorAll('.switch').forEach(function (sw) {
+      sw.addEventListener('click', function () {
+        sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+      });
+      sw.addEventListener('keydown', function (e) {
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); sw.click(); }
+      });
+    });
+
+    var seg = document.querySelectorAll('#appearance-seg button');
+    seg.forEach(function (b) {
+      b.addEventListener('click', function () {
+        press(seg, b);
+        var idx = Array.prototype.indexOf.call(seg, b);
+        if (idx > 0) applyTheme(idx === 2 ? 'dark' : 'light');
+      });
+    });
+
+    setState('done');
+
+    var params = new URLSearchParams(location.search);
+    if (params.has('plain')) document.body.classList.add('plain');
+    if (params.get('theme')) applyTheme(params.get('theme'));
+    if (params.get('screen')) go(params.get('screen'));
+    if (params.get('state')) {
+      var sb = document.querySelector('[data-state-btn="' + params.get('state') + '"]');
+      if (sb) sb.click();
+    }
+  })();
+</script>
+</body>
+</html>
