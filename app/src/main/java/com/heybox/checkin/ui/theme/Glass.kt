@@ -60,6 +60,9 @@ data class GlassPalette(
     val borderBottom: Color,
     val highlight: Color,
     val shadow: Color,
+    // 表面色相：斜向铺一层，浅色用暖→紫，深色用蓝→紫，别让深色玻璃发脏
+    val tintA: Color,
+    val tintB: Color,
 )
 
 val LightGlass = GlassPalette(
@@ -73,6 +76,8 @@ val LightGlass = GlassPalette(
     borderBottom = Color(0x1FFFFFFF),
     highlight = Color(0x33FFFFFF),
     shadow = Color(0x291A1712),
+    tintA = Color(0xFFF7A64C),
+    tintB = Color(0xFFB9A0D8),
 )
 
 val DarkGlass = GlassPalette(
@@ -86,6 +91,8 @@ val DarkGlass = GlassPalette(
     borderBottom = Color(0x0FFFFFFF),
     highlight = Color(0x1FFFFFFF),
     shadow = Color(0x80000000),
+    tintA = Color(0xFF7FA8C9),
+    tintB = Color(0xFF9C86BC),
 )
 
 private val LocalGlass = staticCompositionLocalOf { LightGlass }
@@ -223,6 +230,16 @@ fun Modifier.glass(
                 ),
             ),
         )
+        // 表面色相：斜着铺一层极淡的暖 → 紫，玻璃才带颜色，而不是一层灰白
+        .background(
+            Brush.linearGradient(
+                colors = listOf(
+                    g.tintA.copy(alpha = 0.07f),
+                    Color.Transparent,
+                    g.tintB.copy(alpha = 0.07f),
+                ),
+            ),
+        )
         .border(
             width = 1.dp,
             brush = Brush.linearGradient(colors = listOf(g.borderTop, g.borderBottom)),
@@ -230,9 +247,10 @@ fun Modifier.glass(
         )
         .drawWithContent {
             drawContent()
+            // 高光也带一点暖色相，纯白会显得塑料
             drawRect(
                 brush = Brush.linearGradient(
-                    colors = listOf(g.highlight, Color.Transparent),
+                    colors = listOf(g.highlight, g.tintA.copy(alpha = 0.05f), Color.Transparent),
                     start = Offset(0f, 0f),
                     end = Offset(size.width * 0.9f, size.height * 0.7f),
                 ),

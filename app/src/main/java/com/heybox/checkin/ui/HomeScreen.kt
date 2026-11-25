@@ -103,8 +103,10 @@ import com.heybox.checkin.ui.theme.NumberStyle
 import com.heybox.checkin.ui.theme.NumberTiny
 import com.heybox.checkin.ui.theme.Glass
 import com.heybox.checkin.ui.theme.glass
-import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.heybox.checkin.ui.theme.LocalBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -272,12 +274,19 @@ fun HomeScreen(
         }
     }
 
-    val barBackdrop = rememberLayerBackdrop()
+    val pageBackdrop = rememberLayerBackdrop()
+    // 底栏要同时折射「页面内容」和「背景光斑」：只取页面层的话，空白处是透明的，玻璃会发灰
+    val rootBackdrop = LocalBackdrop.current
+    val barBackdrop = if (rootBackdrop != null) {
+        rememberCombinedBackdrop(rootBackdrop, pageBackdrop)
+    } else {
+        pageBackdrop
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .layerBackdrop(barBackdrop),
+                .layerBackdrop(pageBackdrop),
         ) {
         when (tab) {
             HomeTab.Today -> TodayTab(
@@ -1282,7 +1291,7 @@ private val BarInset = 5.dp
 @Composable
 private fun BottomBar(
     modifier: Modifier = Modifier,
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     tab: HomeTab,
     onTab: (HomeTab) -> Unit,
 ) {
