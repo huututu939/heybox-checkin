@@ -20,9 +20,19 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import com.kyant.backdrop.shadow.InnerShadow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1264,6 +1274,11 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 
 /* ------------------------------------------------------------- 底部导航 */
 
+/** 底栏的尺寸：拖动切换、拉伸幅度都按这几个量算。 */
+private val BarHeight = 58.dp
+private val TabWidth = 92.dp
+private val BarInset = 5.dp
+
 @Composable
 private fun BottomBar(
     modifier: Modifier = Modifier,
@@ -1271,21 +1286,29 @@ private fun BottomBar(
     tab: HomeTab,
     onTab: (HomeTab) -> Unit,
 ) {
-    val highlight = Glass.palette.highlight
-    val borderTop = Glass.palette.borderTop
-    val borderBottom = Glass.palette.borderBottom
     val density = LocalDensity.current
-    val tabWidth = 96.dp
-    val barWidth = tabWidth * 2 + 8.dp
+    val scope = rememberCoroutineScope()
+    val travel = with(density) { TabWidth.toPx() }
+    val barWidth = TabWidth * 2 + BarInset * 2
+    val pill = RoundedCornerShape(percent = 50)
+    // 手势回调活得比一次重组久，tab / onTab 要从最新值读，别用闭包里那份
+    val currentTab by rememberUpdatedState(tab)
+    val onTabNow by rememberUpdatedState(onTab)
 
-    // 选中块滑动：与上游 LiquidBottomTabs 一样用 spring，不用瞬间切换
-    val offset = remember { Animatable(0f) }
+    // 选中块左边缘（px）：base 是页签对应的静止位置，pull 是这次拖动额外拉出的位移
+    val base = remember { Animatable(if (tab == HomeTab.Today) 0f else travel) }
+    var pull by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(tab) {
-        offset.animateTo(
-            targetValue = if (tab == HomeTab.Today) 0f else with(density) { tabWidth.toPx() },
+        base.animateTo(
+            targetValue = if (tab == HomeTab.Today) 0f else travel,
             animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         )
     }
+
+    var dragging by remember { mutableStateOf(false) }
+    // 手指位置：高光落在哪、按下的那一下收多少，都看它
+    var touch by remember { mutableStateOf(Offset.Unspecified) }
+    val touchAlpha = remember { Animatable(0f) }
 
     Box(
         modifier = modifier
@@ -1297,56 +1320,132 @@ private fun BottomBar(
         Box(
             modifier = Modifier
                 .width(barWidth)
-                .height(56.dp)
+                .height(BarHeight)
+                // backdrop 有几层会画到宿主矩形边界，先按胶囊裁一刀，免得露出一块方玻璃
+                .clip(pill)
+                // 点按切页、横拖跟手放在同一套手势里，避免两个 detector 抢事件
+                .pointerInput(travel) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        touch = down.position
+                        pull = 0f
+                        val fade = scope.launch { touchAlpha.animateTo(1f, tween(110)) }
+                        var dragged = false
+                        var travelled = 0f
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUpIgnoreConsumed()) break
+                            val dx = change.position.x - change.previousPosition.x
+                            travelled += dx
+                            if (!dragged && kotlin.math.abs(travelled) > viewConfiguration.touchSlop) {
+                                dragged = true
+                                dragging = true
+                            }
+                            if (dragged) {
+                                change.consume()
+                                touch = change.position
+                                // 跟手，同时夹在两端，别让选中块滑出底栏
+                                pull = (base.value + pull + dx).coerceIn(0f, travel) - base.value
+                            }
+                        }
+                        fade.cancel()
+                        scope.launch { touchAlpha.animateTo(0f, tween(240)) }
+                        if (dragged) {
+                            dragging = false
+                            val moved = (base.value + pull).coerceIn(0f, travel)
+                            val target =
+                                if (moved > travel / 2f) HomeTab.Settings else HomeTab.Today
+                            scope.launch {
+                                // 把跟手的位移并进基准，再从这儿弹到目标位置，视觉上不跳
+                                base.snapTo(moved)
+                                pull = 0f
+                                if (target != currentTab) onTabNow(target)
+                                else base.animateTo(
+                                    targetValue = if (target == HomeTab.Today) 0f else travel,
+                                    animationSpec = spring(dampingRatio = 0.66f, stiffness = 380f),
+                                )
+                            }
+                        } else {
+                            onTabNow(if (down.position.x < size.width / 2f) HomeTab.Today else HomeTab.Settings)
+                        }
+                    }
+                }
+                // 整块只做一层软玻璃，不描边：描边只留给选中块那一圈椭圆
                 .drawBackdrop(
                     backdrop = backdrop,
-                    shape = { RoundedCornerShape(30.dp) },
+                    shape = { pill },
                     effects = {
                         vibrancy()
                         blur(10.dp.toPx())
                         lens(18.dp.toPx(), 40.dp.toPx())
                     },
-                    highlight = { Highlight.Default.copy(alpha = 0.8f) },
+                    highlight = { Highlight.Default.copy(alpha = 0.12f) },
                     shadow = { Shadow.Default },
-                    innerShadow = { InnerShadow.Default },
                 )
-                .border(
-                    1.dp,
-                    Brush.linearGradient(listOf(borderTop, borderBottom)),
-                    RoundedCornerShape(30.dp),
-                )
+                // 跟手高光：一团柔光落在手指下面，抬手淡掉
                 .drawWithContent {
                     drawContent()
-                    drawRect(
-                        brush = Brush.linearGradient(
-                            colors = listOf(highlight, Color.Transparent),
-                            start = Offset(0f, 0f),
-                            end = Offset(size.width * 0.8f, size.height),
-                        ),
-                    )
+                    val a = touchAlpha.value
+                    if (a > 0.01f && touch.isSpecified) {
+                        val r = size.height / 2f
+                        val path = Path().apply {
+                            addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(r, r)))
+                        }
+                        clipPath(path) {
+                            // 收拢在手指周围，别糊满整条底栏
+                            val radius = size.height * 1.35f
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color.White.copy(alpha = 0.17f * a), Color.Transparent),
+                                    center = touch,
+                                    radius = radius,
+                                ),
+                                radius = radius,
+                                center = touch,
+                            )
+                        }
+                    }
                 }
-                .padding(4.dp),
+                .padding(BarInset),
         ) {
-            // 选中块：一块更亮的玻璃，位置随 spring 平移
+            // 选中块：被拖多远就拉多长（tanh 收敛），像一块被扯动的玻璃
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(offset.value.roundToInt(), 0) }
-                    .width(tabWidth)
+                    .width(TabWidth)
                     .fillMaxHeight()
-                    .shadow(8.dp, RoundedCornerShape(26.dp), clip = false, ambientColor = Ink.ink.copy(alpha = 0.12f), spotColor = Ink.ink.copy(alpha = 0.12f))
-                    .clip(RoundedCornerShape(26.dp))
+                    .offset {
+                        val extra = stretch(travel, dragging, pull)
+                        IntOffset((base.value + pull - extra / 2f).roundToInt(), 0)
+                    }
+                    .graphicsLayer {
+                        scaleX = (travel + stretch(travel, dragging, pull)) / travel
+                        scaleY = 1f - 0.04f * touchAlpha.value
+                    }
+                    .shadow(
+                        8.dp,
+                        pill,
+                        clip = false,
+                        ambientColor = Ink.ink.copy(alpha = 0.12f),
+                        spotColor = Ink.ink.copy(alpha = 0.12f),
+                    )
+                    .clip(pill)
                     .background(
+                        // 选中块比底栏更实一点，才撑得住一圈亮边
                         Brush.verticalGradient(
                             listOf(
-                                Ink.surface.copy(alpha = 0.52f),
-                                Ink.surface.copy(alpha = 0.20f),
+                                Ink.surface.copy(alpha = 0.74f),
+                                Ink.surface.copy(alpha = 0.44f),
                             ),
                         ),
                     )
                     .border(
-                        1.dp,
-                        Brush.linearGradient(listOf(borderTop, borderBottom)),
-                        RoundedCornerShape(26.dp),
+                        1.2.dp,
+                        // 一圈完整的椭圆反光：上沿最亮，下沿留一点，边界才立得住
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.30f)),
+                        ),
+                        pill,
                     ),
             )
             Row(
@@ -1354,12 +1453,16 @@ private fun BottomBar(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TabItem("今天", tab == HomeTab.Today, TabIcon.Today, Modifier.width(tabWidth)) { onTab(HomeTab.Today) }
-                TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings, Modifier.width(tabWidth)) { onTab(HomeTab.Settings) }
+                TabItem("今天", tab == HomeTab.Today, TabIcon.Today, Modifier.width(TabWidth))
+                TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings, Modifier.width(TabWidth))
             }
         }
     }
 }
+
+/** 拖动时额外拉出的宽度（px）：跟位移走，但很快收敛，最多拉出四分之一格。 */
+private fun stretch(travel: Float, dragging: Boolean, pull: Float): Float =
+    if (!dragging) 0f else (kotlin.math.abs(pull) * 0.55f).coerceAtMost(travel * 0.25f)
 
 private enum class TabIcon { Today, Settings }
 
@@ -1369,25 +1472,15 @@ private fun TabItem(
     selected: Boolean,
     icon: TabIcon,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
-        label = "tabPress",
-    )
     val color = if (selected) Ink.ink else Ink.muted
     val canvasColor = Ink.canvas
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier.fillMaxHeight(),
     ) {
-        Canvas(Modifier.size(20.dp)) {
+        Canvas(Modifier.size(19.dp)) {
             val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             val w = size.width
             when (icon) {
@@ -1419,8 +1512,16 @@ private fun TabItem(
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.5.sp, letterSpacing = 0.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontSize = 10.5.sp,
+            lineHeight = 12.sp,
+            letterSpacing = 0.sp,
+            maxLines = 1,
+        )
     }
 }
 
