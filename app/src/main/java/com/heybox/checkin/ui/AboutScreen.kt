@@ -277,7 +277,8 @@ private fun UpdateRow() {
         }
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // 失败文案可能很长（例如 DNS 报错），单独占一行，别把后面的下载链接挤出屏幕。
+    Column {
         when (val s = state) {
             UpdateState.Idle -> LinkAction("检查更新", action = check)
             UpdateState.Checking -> Text(
@@ -286,12 +287,18 @@ private fun UpdateRow() {
                 color = Ink.muted,
             )
 
-            UpdateState.UpToDate -> {
+            UpdateState.UpToDate -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text("已是最新版本", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
                 LinkAction("再查一次", action = check)
             }
 
-            is UpdateState.Newer -> {
+            is UpdateState.Newer -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text("有新版本 ${s.tag}", style = MaterialTheme.typography.bodySmall, color = Ink.accent)
                 LinkAction("前往下载 →") { openUrl(context, s.url) }
             }
@@ -302,7 +309,13 @@ private fun UpdateRow() {
                     style = MaterialTheme.typography.bodySmall,
                     color = Ink.muted,
                 )
-                LinkAction("打开下载页 →") { openUrl(context, UpdateCheck.RELEASES_URL) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    LinkAction("重试", action = check)
+                    LinkAction("打开下载页 →") { openUrl(context, UpdateCheck.RELEASES_URL) }
+                }
             }
         }
     }
