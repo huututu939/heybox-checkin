@@ -161,6 +161,15 @@ class SessionStore(context: Context) {
 
     fun setAppearance(mode: String) = prefs.edit().putString(KEY_APPEARANCE, mode).apply()
 
+    /**
+     * 最近任务隐藏：离开界面时结束任务，多任务里不留卡片。
+     * 默认关闭；开启前会提醒用户先在最近任务里锁定卡片（EMUI 等 ROM 的清后台行为）。
+     */
+    fun hideFromRecents(): Boolean = prefs.getBoolean(KEY_HIDE_RECENT, false)
+
+    fun setHideFromRecents(enabled: Boolean) =
+        prefs.edit().putBoolean(KEY_HIDE_RECENT, enabled).apply()
+
     /** 首启风险提示是否已确认。存版本号，提示文案改版后可重新弹一次。 */
     fun acceptedNotice(): Int = prefs.getInt(KEY_NOTICE_VERSION, 0)
 
@@ -272,6 +281,7 @@ class SessionStore(context: Context) {
         private const val KEY_RETRY_DAY = "retry_day"
         private const val KEY_RETRY_COUNT = "retry_count"
         private const val KEY_APPEARANCE = "appearance"
+        private const val KEY_HIDE_RECENT = "hide_recent"
         private const val KEY_NOTICE_VERSION = "notice_version"
 
         const val MAX_RETRIES = 2

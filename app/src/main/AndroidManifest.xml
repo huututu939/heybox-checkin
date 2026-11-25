@@ -9,11 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <application android:name=".HeyboxApp" android:allowBackup="false" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:supportsRtl="true" android:theme="@style/Theme.HeyboxCheckin">
-        <!-- excludeFromRecents：多任务里不出现盒签卡片，避免手滑把正在值守的进程划掉。
-             回到 App 用桌面图标或小组件；定时任务由闹钟拉起前台服务，不依赖这个任务。 -->
         <activity
             android:name=".ui.MainActivity"
-            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">

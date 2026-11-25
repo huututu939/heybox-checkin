@@ -17,8 +17,13 @@ internal fun describe(error: Throwable): String =
 
 /** 打开外部链接；没有可用的浏览器时用 Toast 兜底，不让调用方崩。 */
 internal fun openUrl(context: Context, url: String) {
+    // 跳浏览器不算「用户离开」，否则「最近任务隐藏」会把 App 的任务一起结束掉。
+    MainActivity.skipHideOnLeave = true
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-        .onFailure { Toast.makeText(context, "没有可打开链接的应用", Toast.LENGTH_SHORT).show() }
+        .onFailure {
+            MainActivity.skipHideOnLeave = false
+            Toast.makeText(context, "没有可打开链接的应用", Toast.LENGTH_SHORT).show()
+        }
 }
 
 internal fun formatTime(millis: Long): String =

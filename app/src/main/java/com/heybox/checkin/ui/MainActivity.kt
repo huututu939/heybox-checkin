@@ -37,9 +37,30 @@ import com.heybox.checkin.work.Scheduler
 
 class MainActivity : ComponentActivity() {
 
+    private val store by lazy { SessionStore(this) }
     private val resumeTick = mutableIntStateOf(0)
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    /**
+     * 「最近任务隐藏」：用户按 Home / 最近任务离开时把任务整个结束，多任务里就不留卡片。
+     * EMUI 这类 ROM 不认 manifest 的 excludeFromRecents，只有主动移除任务才有效。
+     * 注意：这不是 force-stop，闹钟不受影响；但未锁定卡片时系统可能连带回收进程。
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (skipHideOnLeave) {
+            skipHideOnLeave = false
+            return
+        }
+        if (store.hideFromRecents()) finishAndRemoveTask()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeTick.intValue++
+        skipHideOnLeave = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,7 +73,6 @@ class MainActivity : ComponentActivity() {
         }
         requestPinFromIntent()
         setContent {
-            val store = remember { SessionStore(this) }
             var appearance by remember { mutableStateOf(store.appearance()) }
             val dark = when (appearance) {
                 "light" -> false
@@ -87,11 +107,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        resumeTick.intValue++
-    }
-
     /**
      * 仅 debug 包：`am start --es pin_widget 4x1` / `2x2` 直接请桌面把小组件钉到主屏，
      * 省去手动长按桌面找入口的步骤。release 包里这段不会执行。
@@ -104,6 +119,14 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.isRequestPinAppWidgetSupported) {
             manager.requestPinAppWidget(ComponentName(this, provider), null, null)
         }
+    }
+
+    companion object {
+        /**
+         * 从 App 内点开外部链接时置位一次：浏览器启动同样会触发 onUserLeaveHint，
+         * 不跳过的话任务会被一起移除，用户从浏览器按返回就落到桌面而不是 App。
+         */
+        internal var skipHideOnLeave = false
     }
 }
 

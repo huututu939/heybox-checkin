@@ -103,6 +103,8 @@ fun HomeScreen(
     var permissions by remember { mutableStateOf(readPermissions(context)) }
     var showAbout by remember { mutableStateOf(false) }
     var enabledShares by remember { mutableStateOf(store.enabledShares()) }
+    var hideRecent by remember { mutableStateOf(store.hideFromRecents()) }
+    var askHideRecent by remember { mutableStateOf(false) }
     // 提到分支外面：进关于页再返回时，首页还停在原来的位置，不会跳回顶部。
     val homeScroll = rememberScrollState()
 
@@ -255,6 +257,15 @@ fun HomeScreen(
         Spacer(Modifier.height(14.dp))
         PermissionsCard(
             permissions = permissions,
+            hideRecent = hideRecent,
+            onToggleHide = { enabled ->
+                if (enabled) {
+                    askHideRecent = true
+                } else {
+                    store.setHideFromRecents(false)
+                    hideRecent = false
+                }
+            },
             onFix = { target ->
                 when (target) {
                     "notify" -> openAppSettings(context)
@@ -264,6 +275,34 @@ fun HomeScreen(
             },
             onAutostart = { startupHelp = true },
         )
+        if (askHideRecent) {
+            AlertDialog(
+                onDismissRequest = { askHideRecent = false },
+                containerColor = Ink.surface,
+                titleContentColor = Ink.ink,
+                textContentColor = Ink.muted,
+                title = { Text("先在最近任务里锁定盒签", style = MaterialTheme.typography.titleMedium) },
+                text = {
+                    Text(
+                        "开启后，离开 App 时会结束任务，多任务里不再留下盒签卡片。\n\n" +
+                            "请先在最近任务里长按盒签卡片并锁定，再回来开启：没锁定时卡片直接消失，" +
+                            "系统可能顺手把进程一起回收，定时闹钟也会失效，只能重新打开 App 补排。\n\n" +
+                            "锁定后点下面的按钮。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        store.setHideFromRecents(true)
+                        hideRecent = true
+                        askHideRecent = false
+                    }) { Text("已锁定，开启", color = Ink.accent) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { askHideRecent = false }) { Text("取消", color = Ink.muted) }
+                },
+            )
+        }
         if (startupHelp) {
             AlertDialog(
                 onDismissRequest = { startupHelp = false },
@@ -927,7 +966,13 @@ private fun AppearanceOption(text: String, selected: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun PermissionsCard(permissions: Permissions, onFix: (String) -> Unit, onAutostart: () -> Unit) {
+private fun PermissionsCard(
+    permissions: Permissions,
+    hideRecent: Boolean,
+    onToggleHide: (Boolean) -> Unit,
+    onFix: (String) -> Unit,
+    onAutostart: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -967,10 +1012,43 @@ private fun PermissionsCard(permissions: Permissions, onFix: (String) -> Unit, o
             )
         }
         HorizontalDivider(color = Ink.line, thickness = 1.dp)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "最近任务隐藏",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (hideRecent) Ink.ink else Ink.muted,
+                )
+                Text(
+                    "离开时结束任务，多任务里不留卡片",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.muted,
+                    fontSize = 11.sp,
+                )
+            }
+            Switch(
+                checked = hideRecent,
+                onCheckedChange = onToggleHide,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Ink.onAccent,
+                    checkedTrackColor = Ink.accent,
+                    uncheckedThumbColor = Ink.muted,
+                    uncheckedTrackColor = Ink.raised,
+                    uncheckedBorderColor = Ink.line,
+                ),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
         Text(
-            "最近任务里如果还有盒签卡片，请长按锁定。EMUI 等部分系统不认「不显示在最近任务」的设置，"
-                + "而直接划掉卡片会连定时闹钟一起取消，需要重新打开 App 才会补排。",
+            "开启前先在最近任务里长按盒签卡片锁定：未锁定时卡片消失，系统可能连带回收进程，"
+                + "定时闹钟也会失效，只能重新打开 App 补排。",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
             fontSize = 11.sp,
