@@ -89,14 +89,14 @@
 
 ## 自己编译
 
-需要 JDK 17、Android SDK 35：
+需要 JDK 17、Android SDK 37：
 
 ```bash
 ./gradlew testDebugUnitTest
 ./gradlew assembleDebug
 ```
 
-Windows 用 `gradlew.bat`，或在 `local.properties` 里写 `sdk.dir=...`。首次运行会下载 Gradle 8.13，网络受限时可直接用本机 Gradle 8.13+ 执行同名任务。
+Windows 用 `gradlew.bat`，或在 `local.properties` 里写 `sdk.dir=...`。首次运行会下载 Gradle 9.9.2，网络受限时可直接用本机 Gradle 9.9.2+ 执行同名任务。
 
 要出正式包，在仓库根目录放 `keystore.properties` 与 `keystore/`，再执行 `./gradlew assembleRelease`。**keystore 丢了就无法给已安装的用户覆盖升级，务必备份。**
 
