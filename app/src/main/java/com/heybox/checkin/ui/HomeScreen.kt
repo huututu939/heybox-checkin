@@ -165,8 +165,11 @@ fun HomeScreen(
     }
 
     val now = System.currentTimeMillis()
-    val ranToday = record?.let { isSameLocalDay(it.at, now) } == true
-    val shareDone = record?.let { run ->
+    // 只有同一天的记录才能当「今天」用。否则跨天之后首页会挂着昨天的完成态和增量，
+    // 出现「状态胶囊说待执行、卡片说已由其它入口完成」这种自相矛盾的画面。
+    val todayRecord = record.todayOrNull(now)
+    val ranToday = todayRecord != null
+    val shareDone = todayRecord?.let { run ->
         enabledShares.all { run.taskStates[it] == "finish" }
     } == true
     val status = when {
@@ -216,11 +219,10 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(12.dp))
         }
-        HeroCard(record, ranToday, nextAt, scheduled, status, running, startHour, endHour)
+        HeroCard(today = todayRecord, last = record, nextAt = nextAt, scheduled = scheduled, startHour = startHour, endHour = endHour)
         Spacer(Modifier.height(14.dp))
         TasksCard(
-            record = record,
-            ranToday = ranToday,
+            today = todayRecord,
             enabledShares = enabledShares,
             onToggleShare = { id, enabled ->
                 store.setShareTaskEnabled(id, enabled)
@@ -411,12 +413,10 @@ private fun PulseAlpha(): Float {
 
 @Composable
 private fun HeroCard(
-    record: RunRecord?,
-    ranToday: Boolean,
+    today: RunRecord?,
+    last: RunRecord?,
     nextAt: Long,
     scheduled: Boolean,
-    status: String,
-    running: Boolean,
     startHour: Int,
     endHour: Int,
 ) {
@@ -433,17 +433,18 @@ private fun HeroCard(
         }
         Spacer(Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-            StatCell("经验", deltaText(record, record?.expDelta), Modifier.weight(1f))
+            StatCell("经验", deltaText(today, today?.expDelta), Modifier.weight(1f))
             VerticalRule()
-            StatCell("H 币", deltaText(record, record?.coinDelta), Modifier.weight(1f))
+            StatCell("H 币", deltaText(today, today?.coinDelta), Modifier.weight(1f))
             VerticalRule()
-            StatCell("电池", deltaText(record, record?.batteryDelta), Modifier.weight(1f))
+            StatCell("电池", deltaText(today, today?.batteryDelta), Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
         Text(
             when {
-                record == null -> "尚未同步 · 点下方按钮跑一次"
-                !record.executed -> "今天已由其它入口完成，本次没有重复执行"
+                last == null -> "尚未同步 · 点下方按钮跑一次"
+                today == null -> "今天还没跑过 · 上次 ${formatTime(last.at)}，下面是那次的余额"
+                !today.executed -> "今天已由其它入口完成，本次没有重复执行"
                 else -> "上面是本次执行带来的增量，下一行是账户当前余额"
             },
             style = MaterialTheme.typography.bodySmall,
@@ -452,7 +453,7 @@ private fun HeroCard(
         Spacer(Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("账户余额", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(balanceText(record), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+            Text(balanceText(last), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
         }
         Spacer(Modifier.height(16.dp))
         HorizontalDivider(color = Ink.line, thickness = 1.dp)
@@ -525,8 +526,7 @@ private fun VerticalRule() {
 
 @Composable
 private fun TasksCard(
-    record: RunRecord?,
-    ranToday: Boolean,
+    today: RunRecord?,
     enabledShares: Set<String>,
     onToggleShare: (String, Boolean) -> Unit,
 ) {
@@ -541,11 +541,7 @@ private fun TasksCard(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("每日四件", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
             Text(
-                when {
-                    record == null -> "尚未同步"
-                    ranToday -> "今天"
-                    else -> formatTime(record.at)
-                },
+                if (today == null) "今天 · 尚未执行" else "今天",
                 style = MaterialTheme.typography.labelSmall,
                 color = Ink.muted,
             )
@@ -561,8 +557,8 @@ private fun TasksCard(
         rows.forEachIndexed { index, (id, name) ->
             if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
             val state = when (id) {
-                "sign" -> if (record?.signed == true) "finish" else record?.taskStates?.get(id)
-                else -> record?.taskStates?.get(id)
+                "sign" -> if (today?.signed == true) "finish" else today?.taskStates?.get(id)
+                else -> today?.taskStates?.get(id)
             }
             if (id == "sign") {
                 TaskRow(name, state)

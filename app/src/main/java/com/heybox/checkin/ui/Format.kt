@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import com.heybox.checkin.data.RunRecord
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -37,3 +38,10 @@ internal fun isSameLocalDay(a: Long, b: Long): Boolean {
     return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) &&
         ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
 }
+
+/**
+ * 只有同一天的快照才能当「今天」用。
+ * 不这么过滤，跨天之后首页会把昨天的完成态、任务勾选和增量都当成今天的。
+ */
+internal fun RunRecord?.todayOrNull(now: Long): RunRecord? =
+    this?.takeIf { isSameLocalDay(it.at, now) }
