@@ -1,5 +1,19 @@
 package com.heybox.checkin.ui.theme
 
+import android.os.Build
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,15 +58,15 @@ data class GlassPalette(
 
 val LightGlass = GlassPalette(
     base = Color(0xFFF1EFEA),
-    warm = Color(0xFFF3C07B),
-    cool = Color(0xFFAFC3D4),
-    accent = Color(0xFFE8A87C),
-    glassTop = Color(0xD1FFFFFF),
-    glassBottom = Color(0x94FFFFFF),
-    borderTop = Color(0xE6FFFFFF),
-    borderBottom = Color(0x33FFFFFF),
-    highlight = Color(0x26FFFFFF),
-    shadow = Color(0x1A1A1712),
+    warm = Color(0xFFF2B063),
+    cool = Color(0xFF9DBBD2),
+    accent = Color(0xFFE9976B),
+    glassTop = Color(0x7AFFFFFF),
+    glassBottom = Color(0x45FFFFFF),
+    borderTop = Color(0xF0FFFFFF),
+    borderBottom = Color(0x1FFFFFFF),
+    highlight = Color(0x33FFFFFF),
+    shadow = Color(0x291A1712),
 )
 
 val DarkGlass = GlassPalette(
@@ -60,12 +74,12 @@ val DarkGlass = GlassPalette(
     warm = Color(0xFF6B4A22),
     cool = Color(0xFF22323D),
     accent = Color(0xFF4A2A1E),
-    glassTop = Color(0x29FFFFFF),
-    glassBottom = Color(0x12FFFFFF),
-    borderTop = Color(0x3DFFFFFF),
+    glassTop = Color(0x24FFFFFF),
+    glassBottom = Color(0x0DFFFFFF),
+    borderTop = Color(0x47FFFFFF),
     borderBottom = Color(0x0FFFFFFF),
-    highlight = Color(0x1AFFFFFF),
-    shadow = Color(0x66000000),
+    highlight = Color(0x1FFFFFFF),
+    shadow = Color(0x80000000),
 )
 
 private val LocalGlass = staticCompositionLocalOf { LightGlass }
@@ -95,30 +109,30 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
 
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.warm.copy(alpha = 0.55f), g.warm.copy(alpha = 0f)),
-                    center = Offset(w * 0.98f, h * -0.04f),
-                    radius = w * 0.62f,
+                    colors = listOf(g.warm.copy(alpha = 0.85f), g.warm.copy(alpha = 0f)),
+                    center = Offset(w * 0.90f, h * 0.12f),
+                    radius = w * 1.05f,
                 ),
-                radius = w * 0.62f,
-                center = Offset(w * 0.98f, h * -0.04f),
+                radius = w * 1.05f,
+                center = Offset(w * 0.90f, h * 0.12f),
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.cool.copy(alpha = 0.5f), g.cool.copy(alpha = 0f)),
-                    center = Offset(w * -0.06f, h * 0.46f),
-                    radius = w * 0.72f,
+                    colors = listOf(g.cool.copy(alpha = 0.75f), g.cool.copy(alpha = 0f)),
+                    center = Offset(w * 0.08f, h * 0.58f),
+                    radius = w * 1.02f,
                 ),
-                radius = w * 0.72f,
-                center = Offset(w * -0.06f, h * 0.46f),
+                radius = w * 1.02f,
+                center = Offset(w * 0.08f, h * 0.58f),
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.accent.copy(alpha = 0.4f), g.accent.copy(alpha = 0f)),
-                    center = Offset(w * 1.0f, h * 0.92f),
-                    radius = w * 0.62f,
+                    colors = listOf(g.accent.copy(alpha = 0.62f), g.accent.copy(alpha = 0f)),
+                    center = Offset(w * 0.94f, h * 0.92f),
+                    radius = w * 0.92f,
                 ),
-                radius = w * 0.62f,
-                center = Offset(w * 1.0f, h * 0.92f),
+                radius = w * 0.92f,
+                center = Offset(w * 0.94f, h * 0.92f),
             )
         }
     }
@@ -132,8 +146,11 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     raised: Boolean = true,
+    boost: Float = 0f,
 ): Modifier {
     val g = Glass.palette
+    val top = g.glassTop.copy(alpha = (g.glassTop.alpha + boost).coerceAtMost(0.95f))
+    val bottom = g.glassBottom.copy(alpha = (g.glassBottom.alpha + boost).coerceAtMost(0.95f))
     return this
         .shadow(
             elevation = if (raised) 14.dp else 6.dp,
@@ -144,7 +161,7 @@ fun Modifier.glass(
         )
         .clip(shape)
         .background(
-            Brush.verticalGradient(colors = listOf(g.glassTop, g.glassBottom)),
+            Brush.verticalGradient(colors = listOf(top, bottom)),
         )
         .border(
             width = 1.dp,

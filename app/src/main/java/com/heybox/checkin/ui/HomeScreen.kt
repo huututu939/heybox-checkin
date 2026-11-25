@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,9 +58,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -76,7 +79,13 @@ import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
 import com.heybox.checkin.ui.theme.NumberTiny
+import com.heybox.checkin.ui.theme.Glass
 import com.heybox.checkin.ui.theme.glass
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
@@ -94,7 +103,7 @@ private const val SHARE_POST = "1"
 private const val SHARE_GAME = "19"
 private const val SHARE_REVIEW = "31"
 private val SHARE_IDS = listOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW)
-private val TAB_BOTTOM = 148.dp
+private val TAB_BOTTOM = 196.dp
 
 /**
  * 首页拆成「今天 / 设置」两个页签：
@@ -236,7 +245,13 @@ fun HomeScreen(
         }
     }
 
+    val haze = remember { HazeState() }
     Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = haze),
+        ) {
         when (tab) {
             HomeTab.Today -> TodayTab(
                 config = config,
@@ -309,9 +324,11 @@ fun HomeScreen(
                 onFixPermissions = { permissions = readPermissions(context) },
             )
         }
+        }
 
         BottomBar(
             modifier = Modifier.align(Alignment.BottomCenter),
+            hazeState = haze,
             tab = tab,
             running = running,
             stage = stage,
@@ -838,7 +855,7 @@ private fun SettingsTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
-            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 96.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 140.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1197,6 +1214,7 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun BottomBar(
     modifier: Modifier = Modifier,
+    hazeState: HazeState,
     tab: HomeTab,
     running: Boolean,
     stage: String,
@@ -1210,8 +1228,32 @@ private fun BottomBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp)
-            .glass(RoundedCornerShape(28.dp))
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp)
+            .shadow(
+                14.dp,
+                RoundedCornerShape(30.dp),
+                clip = false,
+                ambientColor = Glass.palette.shadow,
+                spotColor = Glass.palette.shadow,
+            )
+            .clip(RoundedCornerShape(30.dp))
+            .hazeEffect(
+                state = hazeState,
+                style = HazeStyle(
+                    backgroundColor = Ink.canvas.copy(alpha = 0.35f),
+                    tints = listOf(HazeTint(Ink.surface.copy(alpha = 0.28f))),
+                    blurRadius = 26.dp,
+                    noiseFactor = 0.02f,
+                ),
+            )
+            .border(
+                1.dp,
+                Brush.linearGradient(
+                    listOf(Glass.palette.borderTop, Glass.palette.borderBottom),
+                ),
+                RoundedCornerShape(30.dp),
+            )
+            .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
     ) {
         if (showCta) {
@@ -1274,7 +1316,7 @@ private fun TabItem(label: String, selected: Boolean, icon: TabIcon, onClick: ()
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         Canvas(Modifier.size(20.dp)) {
             val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1326,6 +1368,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(8.dp))

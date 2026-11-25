@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 深色启动底色与 DarkPalette.canvas 对齐；没有这份资源时深色用户会先看到一帧米白。 -->
     <style name="Theme.HeyboxCheckin" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#FF0D1312</item>
-        <item name="android:statusBarColor">#FF0D1312</item>
-        <item name="android:navigationBarColor">#FF0D1312</item>
+        <!-- 深色：背景与 DarkGlass.base 对齐，系统栏透明，图标转白。 -->
+        <item name="android:windowBackground">#FF0A0C0E</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

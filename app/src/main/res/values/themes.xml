@@ -3,8 +3,12 @@
     <style name="Theme.HeyboxCheckin" parent="@android:style/Theme.Material.Light.NoActionBar">
         <!-- 与 LightPalette.canvas 对齐，避免 Compose 起来前闪一帧别的底色。 -->
         <item name="android:windowBackground">#FFF5F1E8</item>
-        <item name="android:statusBarColor">#FFF5F1E8</item>
-        <item name="android:navigationBarColor">#FFF5F1E8</item>
+        <!-- 透明系统栏：让光斑背景铺到状态栏和手势条后面，才叫沉浸式。 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
