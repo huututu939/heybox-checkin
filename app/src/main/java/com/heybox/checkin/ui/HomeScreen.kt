@@ -966,6 +966,15 @@ private fun PermissionsCard(permissions: Permissions, onFix: (String) -> Unit, o
                 modifier = Modifier.clickable(onClick = onAutostart),
             )
         }
+        HorizontalDivider(color = Ink.line, thickness = 1.dp)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "最近任务里如果还有盒签卡片，请长按锁定。EMUI 等部分系统不认「不显示在最近任务」的设置，"
+                + "而直接划掉卡片会连定时闹钟一起取消，需要重新打开 App 才会补排。",
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.muted,
+            fontSize = 11.sp,
+        )
     }
 }
 
