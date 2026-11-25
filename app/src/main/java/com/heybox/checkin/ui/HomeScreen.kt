@@ -13,6 +13,16 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import com.kyant.backdrop.shadow.InnerShadow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,6 +107,7 @@ import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
 import com.heybox.checkin.work.Scheduler
 import com.heybox.checkin.widget.Widgets
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private enum class HomeTab { Today, Settings }
@@ -1261,7 +1272,21 @@ private fun BottomBar(
     onTab: (HomeTab) -> Unit,
 ) {
     val highlight = Glass.palette.highlight
-    // 胶囊宽度包住内容，不再拉满整行——空玻璃看起来最像「一块白板」。
+    val borderTop = Glass.palette.borderTop
+    val borderBottom = Glass.palette.borderBottom
+    val density = LocalDensity.current
+    val tabWidth = 96.dp
+    val barWidth = tabWidth * 2 + 8.dp
+
+    // 选中块滑动：与上游 LiquidBottomTabs 一样用 spring，不用瞬间切换
+    val offset = remember { Animatable(0f) }
+    LaunchedEffect(tab) {
+        offset.animateTo(
+            targetValue = if (tab == HomeTab.Today) 0f else with(density) { tabWidth.toPx() },
+            animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1269,32 +1294,25 @@ private fun BottomBar(
             .padding(bottom = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
+        Box(
             modifier = Modifier
+                .width(barWidth)
+                .height(56.dp)
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { RoundedCornerShape(30.dp) },
                     effects = {
                         vibrancy()
-                        blur(18.dp.toPx())
-                        lens(30.dp.toPx(), 72.dp.toPx())
+                        blur(10.dp.toPx())
+                        lens(18.dp.toPx(), 40.dp.toPx())
                     },
-                    highlight = { Highlight.Default.copy(alpha = 0.85f) },
+                    highlight = { Highlight.Default.copy(alpha = 0.8f) },
                     shadow = { Shadow.Default },
-                )
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Ink.surface.copy(alpha = 0.18f),
-                            Ink.surface.copy(alpha = 0.05f),
-                        ),
-                    ),
+                    innerShadow = { InnerShadow.Default },
                 )
                 .border(
                     1.dp,
-                    Brush.linearGradient(
-                        listOf(Glass.palette.borderTop, Glass.palette.borderBottom),
-                    ),
+                    Brush.linearGradient(listOf(borderTop, borderBottom)),
                     RoundedCornerShape(30.dp),
                 )
                 .drawWithContent {
@@ -1307,12 +1325,38 @@ private fun BottomBar(
                         ),
                     )
                 }
-                .padding(horizontal = 26.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(26.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(4.dp),
         ) {
-            TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
-            TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
+            // 选中块：一块更亮的玻璃，位置随 spring 平移
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(offset.value.roundToInt(), 0) }
+                    .width(tabWidth)
+                    .fillMaxHeight()
+                    .shadow(8.dp, RoundedCornerShape(26.dp), clip = false, ambientColor = Ink.ink.copy(alpha = 0.12f), spotColor = Ink.ink.copy(alpha = 0.12f))
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Ink.surface.copy(alpha = 0.52f),
+                                Ink.surface.copy(alpha = 0.20f),
+                            ),
+                        ),
+                    )
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(listOf(borderTop, borderBottom)),
+                        RoundedCornerShape(26.dp),
+                    ),
+            )
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TabItem("今天", tab == HomeTab.Today, TabIcon.Today, Modifier.width(tabWidth)) { onTab(HomeTab.Today) }
+                TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings, Modifier.width(tabWidth)) { onTab(HomeTab.Settings) }
+            }
         }
     }
 }
@@ -1320,7 +1364,20 @@ private fun BottomBar(
 private enum class TabIcon { Today, Settings }
 
 @Composable
-private fun TabItem(label: String, selected: Boolean, icon: TabIcon, onClick: () -> Unit) {
+private fun TabItem(
+    label: String,
+    selected: Boolean,
+    icon: TabIcon,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+        label = "tabPress",
+    )
     val color = if (selected) Ink.ink else Ink.muted
     val canvasColor = Ink.canvas
     Column(
