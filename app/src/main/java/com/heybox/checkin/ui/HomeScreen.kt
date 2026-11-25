@@ -316,7 +316,9 @@ fun HomeScreen(
             stage = stage,
             launching = launching,
             showCta = tab == HomeTab.Today,
+            expired = expired,
             onRun = runNow,
+            onRelogin = onRelogin,
             onTab = { tab = it },
         )
 
@@ -1196,7 +1198,9 @@ private fun BottomBar(
     stage: String,
     launching: Boolean,
     showCta: Boolean,
+    expired: Boolean,
     onRun: () -> Unit,
+    onRelogin: () -> Unit,
     onTab: (HomeTab) -> Unit,
 ) {
     Column(
@@ -1207,7 +1211,8 @@ private fun BottomBar(
     ) {
         if (showCta) {
             Button(
-                onClick = onRun,
+                // 登录过期时先修凭据：直接跑只会再失败一次。
+                onClick = if (expired) onRelogin else onRun,
                 enabled = !running && !launching,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -1221,7 +1226,11 @@ private fun BottomBar(
                     .height(52.dp),
             ) {
                 Text(
-                    if (running) stage.ifEmpty { "执行中" } else "立即执行一次",
+                    when {
+                        expired -> "重新登录"
+                        running -> stage.ifEmpty { "执行中" }
+                        else -> "立即执行一次"
+                    },
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
                 )
