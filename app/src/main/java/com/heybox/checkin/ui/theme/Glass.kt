@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -62,10 +63,10 @@ data class GlassPalette(
 )
 
 val LightGlass = GlassPalette(
-    base = Color(0xFFF1EFEA),
-    warm = Color(0xFFF2B063),
-    cool = Color(0xFF9DBBD2),
-    accent = Color(0xFFE9976B),
+    base = Color(0xFFF3EDE3),
+    warm = Color(0xFFF7A64C),
+    cool = Color(0xFF7FA8C9),
+    accent = Color(0xFFB9A0D8),
     glassTop = Color(0x7AFFFFFF),
     glassBottom = Color(0x45FFFFFF),
     borderTop = Color(0xF0FFFFFF),
@@ -117,7 +118,7 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
 
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.warm.copy(alpha = 0.85f), g.warm.copy(alpha = 0f)),
+                    colors = listOf(g.warm.copy(alpha = 0.95f), g.warm.copy(alpha = 0f)),
                     center = Offset(w * 0.90f, h * 0.12f),
                     radius = w * 1.05f,
                 ),
@@ -126,7 +127,7 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.cool.copy(alpha = 0.75f), g.cool.copy(alpha = 0f)),
+                    colors = listOf(g.cool.copy(alpha = 0.85f), g.cool.copy(alpha = 0f)),
                     center = Offset(w * 0.08f, h * 0.58f),
                     radius = w * 1.02f,
                 ),
@@ -135,12 +136,39 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(g.accent.copy(alpha = 0.62f), g.accent.copy(alpha = 0f)),
+                    colors = listOf(g.accent.copy(alpha = 0.72f), g.accent.copy(alpha = 0f)),
                     center = Offset(w * 0.94f, h * 0.92f),
                     radius = w * 0.92f,
                 ),
                 radius = w * 0.92f,
                 center = Offset(w * 0.94f, h * 0.92f),
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFB6D8C8).copy(alpha = 0.45f), Color.Transparent),
+                    center = Offset(w * 0.22f, h * 0.16f),
+                    radius = w * 0.55f,
+                ),
+                radius = w * 0.55f,
+                center = Offset(w * 0.22f, h * 0.16f),
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFC9BCE0).copy(alpha = 0.42f), Color.Transparent),
+                    center = Offset(w * 0.62f, h * 0.74f),
+                    radius = w * 0.6f,
+                ),
+                radius = w * 0.6f,
+                center = Offset(w * 0.62f, h * 0.74f),
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF8FB8D8).copy(alpha = 0.45f), Color.Transparent),
+                    center = Offset(w * 0.08f, h * 0.98f),
+                    radius = w * 0.7f,
+                ),
+                radius = w * 0.7f,
+                center = Offset(w * 0.08f, h * 0.98f),
             )
         }
     }
@@ -154,10 +182,10 @@ fun GlassBackdrop(modifier: Modifier = Modifier) {
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(24.dp),
     raised: Boolean = true,
-    blurRadius: androidx.compose.ui.unit.Dp = 18.dp,
-    lensRadius: androidx.compose.ui.unit.Dp = 20.dp,
-    lensDepth: androidx.compose.ui.unit.Dp = 44.dp,
-    tintAlpha: Float = 0.30f,
+    blurRadius: androidx.compose.ui.unit.Dp = 14.dp,
+    lensRadius: androidx.compose.ui.unit.Dp = 30.dp,
+    lensDepth: androidx.compose.ui.unit.Dp = 72.dp,
+    tintAlpha: Float = 0.16f,
 ): Modifier {
     val g = Glass.palette
     val backdrop = LocalBackdrop.current
@@ -180,7 +208,7 @@ fun Modifier.glass(
                         blur(blurRadius.toPx())
                         lens(lensRadius.toPx(), lensDepth.toPx())
                     },
-                    highlight = { com.kyant.backdrop.highlight.Highlight.Default },
+                    highlight = { com.kyant.backdrop.highlight.Highlight.Default.copy(alpha = 0.85f) },
                     shadow = { com.kyant.backdrop.shadow.Shadow.Default },
                 )
             } else {

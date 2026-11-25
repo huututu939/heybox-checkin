@@ -58,11 +58,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -107,7 +109,7 @@ private const val SHARE_POST = "1"
 private const val SHARE_GAME = "19"
 private const val SHARE_REVIEW = "31"
 private val SHARE_IDS = listOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW)
-private val TAB_BOTTOM = 132.dp
+private val TAB_BOTTOM = 190.dp
 
 /**
  * 首页拆成「今天 / 设置」两个页签：
@@ -895,7 +897,7 @@ private fun SettingsTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
-            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 116.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 150.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1258,44 +1260,60 @@ private fun BottomBar(
     tab: HomeTab,
     onTab: (HomeTab) -> Unit,
 ) {
-    Row(
+    val highlight = Glass.palette.highlight
+    // 胶囊宽度包住内容，不再拉满整行——空玻璃看起来最像「一块白板」。
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            // 离屏幕底部和左右都留出距离，玻璃才是「浮」在上面的
-            .padding(horizontal = 54.dp, vertical = 14.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { RoundedCornerShape(28.dp) },
-                effects = {
-                    vibrancy()
-                    blur(24.dp.toPx())
-                    lens(26.dp.toPx(), 52.dp.toPx())
-                },
-                highlight = { Highlight.Default },
-                shadow = { Shadow.Default },
-            )
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Ink.surface.copy(alpha = 0.22f),
-                        Ink.canvas.copy(alpha = 0.30f),
-                    ),
-                ),
-            )
-            .border(
-                1.dp,
-                Brush.linearGradient(
-                    listOf(Glass.palette.borderTop, Glass.palette.borderBottom),
-                ),
-                RoundedCornerShape(28.dp),
-            )
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(bottom = 16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
-        TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
+        Row(
+            modifier = Modifier
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedCornerShape(30.dp) },
+                    effects = {
+                        vibrancy()
+                        blur(18.dp.toPx())
+                        lens(30.dp.toPx(), 72.dp.toPx())
+                    },
+                    highlight = { Highlight.Default.copy(alpha = 0.85f) },
+                    shadow = { Shadow.Default },
+                )
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Ink.surface.copy(alpha = 0.18f),
+                            Ink.surface.copy(alpha = 0.05f),
+                        ),
+                    ),
+                )
+                .border(
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(Glass.palette.borderTop, Glass.palette.borderBottom),
+                    ),
+                    RoundedCornerShape(30.dp),
+                )
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(highlight, Color.Transparent),
+                            start = Offset(0f, 0f),
+                            end = Offset(size.width * 0.8f, size.height),
+                        ),
+                    )
+                }
+                .padding(horizontal = 26.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(26.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
+            TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
+        }
     }
 }
 
