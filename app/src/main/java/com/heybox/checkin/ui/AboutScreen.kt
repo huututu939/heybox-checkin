@@ -84,7 +84,6 @@ fun AboutScreen(onBack: () -> Unit) {
             "关于",
             style = MaterialTheme.typography.displayLarge,
             color = Ink.ink,
-            fontSize = 40.sp,
         )
         Spacer(Modifier.height(2.dp))
         Text(
@@ -341,8 +340,7 @@ private fun AboutCard(title: String, content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
+            .background(Ink.surface, RoundedCornerShape(20.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {

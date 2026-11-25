@@ -82,7 +82,7 @@
         android:paddingTop="7dp"
         android:paddingBottom="7dp"
         android:text="立即执行"
-        android:textColor="@color/widget_on_accent"
+        android:textColor="@color/widget_canvas"
         android:textSize="12sp"
         android:textStyle="bold" />
 </LinearLayout>

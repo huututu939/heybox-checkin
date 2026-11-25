@@ -223,7 +223,7 @@ private fun BrandMark() {
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(Ink.accent, RoundedCornerShape(10.dp)),
+                .background(Ink.accent, RoundedCornerShape(11.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text("盒", style = MaterialTheme.typography.titleLarge, color = Ink.onAccent)
@@ -255,10 +255,10 @@ private fun AccentButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(100.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Ink.accent,
-            contentColor = Ink.onAccent,
+            containerColor = Ink.ink,
+            contentColor = Ink.onInk,
             disabledContainerColor = Ink.raised,
             disabledContentColor = Ink.muted,
         ),
@@ -302,7 +302,7 @@ private fun DarkField(
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
         keyboardActions = KeyboardActions(onDone = { onImeDone() }),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Ink.surface,
             unfocusedContainerColor = Ink.surface,

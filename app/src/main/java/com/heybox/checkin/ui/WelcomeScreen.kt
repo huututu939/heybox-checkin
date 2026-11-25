@@ -42,7 +42,7 @@ fun WelcomeScreen(onAccept: () -> Unit) {
     ) {
         Text("盒签", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
         Spacer(Modifier.height(10.dp))
-        Text("开始之前", style = MaterialTheme.typography.displayLarge, color = Ink.ink, fontSize = 38.sp)
+        Text("开始之前", style = MaterialTheme.typography.displayLarge, color = Ink.ink)
         Spacer(Modifier.height(10.dp))
         Text(
             "三件事，看完再决定要不要用。",
@@ -55,7 +55,7 @@ fun WelcomeScreen(onAccept: () -> Unit) {
             index = "01",
             title = "它替你做什么",
             body = "每天在设定的时段里挑一个随机时间，自动完成小黑盒签到。签到固定执行；" +
-                "分享任务默认全部关闭，要的话到首页逐个打开。",
+                "分享任务默认全部关闭，要的话到「今天」页逐个打开。",
         )
         Spacer(Modifier.height(12.dp))
         NoticeBlock(
@@ -75,7 +75,7 @@ fun WelcomeScreen(onAccept: () -> Unit) {
 
         Spacer(Modifier.height(26.dp))
         Text(
-            "登录后建议到「值守条件」把自启动、电池白名单和精确闹钟都打开，" +
+            "登录后建议到「设置 → 值守条件」把自启动、电池白名单和精确闹钟都打开，" +
                 "否则国产系统会在后台把定时任务清掉。",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
@@ -84,7 +84,7 @@ fun WelcomeScreen(onAccept: () -> Unit) {
         Spacer(Modifier.height(22.dp))
         Button(
             onClick = onAccept,
-            shape = RoundedCornerShape(100.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Ink.accent,
                 contentColor = Ink.onAccent,
@@ -111,8 +111,7 @@ private fun NoticeBlock(index: String, title: String, body: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
+            .background(Ink.surface, RoundedCornerShape(20.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
         Row {

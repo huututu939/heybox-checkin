@@ -13,21 +13,27 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -41,18 +47,25 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -62,6 +75,7 @@ import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
+import com.heybox.checkin.ui.theme.NumberTiny
 import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
@@ -69,10 +83,23 @@ import com.heybox.checkin.work.Scheduler
 import com.heybox.checkin.widget.Widgets
 import kotlinx.coroutines.delay
 
+private enum class HomeTab { Today, Settings }
+
 private data class Permissions(val notify: Boolean, val battery: Boolean, val exactAlarm: Boolean) {
     val readyCount: Int get() = listOf(notify, battery, exactAlarm).count { it }
 }
 
+private const val SHARE_POST = "1"
+private const val SHARE_GAME = "19"
+private const val SHARE_REVIEW = "31"
+private val SHARE_IDS = listOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW)
+private val TAB_BOTTOM = 148.dp
+
+/**
+ * 首页拆成「今天 / 设置」两个页签：
+ * 今天 = 状态 + 到账数字 + 下次时间 + 四个任务 + 七天记录，一屏放得下；
+ * 设置 = 自动签到、值守条件、最近任务隐藏、外观、关于与退出。
+ */
 @Composable
 fun HomeScreen(
     context: Context,
@@ -82,38 +109,66 @@ fun HomeScreen(
     darkTheme: Boolean,
     resumeTick: Int,
     previewExpired: Boolean = false,
+    previewHistory: List<RunRecord>? = null,
     onAppearanceChange: (String) -> Unit,
     onRelogin: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    var record by remember { mutableStateOf(store.loadRun()) }
-    var history by remember { mutableStateOf(recentHistory(store)) }
-    var historyOpen by remember { mutableStateOf(false) }
+    var record by remember { mutableStateOf(previewHistory?.lastOrNull() ?: store.loadRun()) }
+    var history by remember { mutableStateOf(previewHistory ?: recentHistory(store)) }
+    var tab by remember { mutableStateOf(HomeTab.Today) }
+    var showAbout by remember { mutableStateOf(false) }
+    var showRecord by remember { mutableStateOf(false) }
     var startupHelp by remember { mutableStateOf(false) }
-    var scheduled by remember { mutableStateOf(store.scheduledEnabled()) }
-    var nextAt by remember { mutableStateOf(store.nextTrigger()) }
+    var askHideRecent by remember { mutableStateOf(false) }
+    var scheduled by remember { mutableStateOf(previewHistory != null || store.scheduledEnabled()) }
+    var nextAt by remember { mutableStateOf(if (previewHistory != null) previewNextRun() else store.nextTrigger()) }
     var startHour by remember { mutableStateOf(store.windowStart()) }
     var endHour by remember { mutableStateOf(store.windowEnd()) }
-    var expired by remember { mutableStateOf(store.sessionExpired()) }
-    val running by RunState.running.collectAsState()
-    val stage by RunState.stage.collectAsState()
+    var expired by remember { mutableStateOf(store.sessionExpired() || previewExpired) }
+    var hideRecent by remember { mutableStateOf(store.hideFromRecents()) }
+    var enabledShares by remember {
+        mutableStateOf(
+            if (previewHistory != null) setOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW) else store.enabledShares(),
+        )
+    }
+    var permissions by remember { mutableStateOf(readPermissions(context)) }
+    var error by remember { mutableStateOf<String?>(null) }
     var launching by remember { mutableStateOf(false) }
     var sawRunning by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var permissions by remember { mutableStateOf(readPermissions(context)) }
-    var showAbout by remember { mutableStateOf(false) }
-    var enabledShares by remember { mutableStateOf(store.enabledShares()) }
-    var hideRecent by remember { mutableStateOf(store.hideFromRecents()) }
-    var askHideRecent by remember { mutableStateOf(false) }
-    // 提到分支外面：进关于页再返回时，首页还停在原来的位置，不会跳回顶部。
-    val homeScroll = rememberScrollState()
+    val running by RunState.running.collectAsState()
+    val stage by RunState.stage.collectAsState()
+    val todayScroll = rememberScrollState()
+    val settingsScroll = rememberScrollState()
 
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
         return
     }
+    if (showRecord) {
+        RecordScreen(history = history, onBack = { showRecord = false })
+        return
+    }
+
+    val now = System.currentTimeMillis()
+    // 只有同一天的记录才能当「今天」用，否则跨天之后首页会挂着昨天的完成态和增量。
+    val todayRecord = record.todayOrNull(now)
+    val ranToday = todayRecord != null
+    val shareDone = todayRecord?.let { run ->
+        enabledShares.all { run.taskStates[it] == "finish" }
+    } == true
+    val status = when {
+        running -> "执行中"
+        error != null -> "未完成"
+        ranToday && todayRecord?.signed == true && shareDone -> "今日已完成"
+        ranToday && todayRecord?.signed == true -> "今日已签到"
+        else -> "今日待执行"
+    }
+    val cells = weekCells(history, now)
 
     LaunchedEffect(resumeTick) {
+        // 预览模式不碰真实状态：不重排闹钟、不覆盖假数据。
+        if (previewHistory != null) return@LaunchedEffect
         permissions = readPermissions(context)
         scheduled = store.scheduledEnabled()
         val stored = store.nextTrigger()
@@ -135,6 +190,7 @@ fun HomeScreen(
         Widgets.refresh(context)
     }
     LaunchedEffect(running) {
+        if (previewHistory != null) return@LaunchedEffect
         launching = false
         if (running) {
             sawRunning = true
@@ -148,7 +204,6 @@ fun HomeScreen(
         // 只在「这次界面亲眼看到过一次执行结束」后回填错误，
         // 避免冷启动时把昨天留下的失败文案又顶到横幅里。
         if (sawRunning) {
-            sawRunning = false
             val result = store.lastResult()
             error = if (result != null && (result.startsWith("失败") || result.startsWith("登录已过期"))) {
                 result
@@ -166,115 +221,105 @@ fun HomeScreen(
         }
     }
 
-    val now = System.currentTimeMillis()
-    // 只有同一天的记录才能当「今天」用。否则跨天之后首页会挂着昨天的完成态和增量，
-    // 出现「状态胶囊说待执行、卡片说已由其它入口完成」这种自相矛盾的画面。
-    val todayRecord = record.todayOrNull(now)
-    val ranToday = todayRecord != null
-    val shareDone = todayRecord?.let { run ->
-        enabledShares.all { run.taskStates[it] == "finish" }
-    } == true
-    val status = when {
-        running -> "执行中"
-        error != null -> "未完成"
-        ranToday && record?.signed == true && shareDone -> "今日已完成"
-        ranToday && record?.signed == true -> "今日已签到"
-        else -> "今日待执行"
+    val runNow: () -> Unit = {
+        if (RunLock.isBusy()) {
+            error = "已有一次任务在执行，本次忽略"
+        } else {
+            error = null
+            launching = true
+            runCatching { CheckInService.start(context, force = true) }
+                .onFailure {
+                    launching = false
+                    error = "无法启动执行服务：${describe(it)}"
+                }
+        }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(homeScroll)
-            .padding(horizontal = 22.dp, vertical = 24.dp),
-    ) {
-        // 顶部身份
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column {
-                Text("盒签", style = MaterialTheme.typography.headlineMedium, color = Ink.ink)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "heybox_id ${config.session.heyboxId}",
-                    style = NumberSmall,
-                    color = Ink.muted,
-                )
-            }
-            StatusChip(status, running)
-        }
-
-        Spacer(Modifier.height(22.dp))
-        if (expired || previewExpired) {
-            ExpiredBanner(onRelogin)
-            Spacer(Modifier.height(12.dp))
-        }
-        if (!scheduled) {
-            SchedulePromptBanner(
-                onEnable = {
-                    scheduled = true
-                    store.setScheduled(true)
-                    nextAt = Scheduler.scheduleNext(context)
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (tab) {
+            HomeTab.Today -> TodayTab(
+                config = config,
+                status = status,
+                running = running,
+                expired = expired,
+                scheduled = scheduled,
+                nextAt = nextAt,
+                startHour = startHour,
+                endHour = endHour,
+                today = todayRecord,
+                cells = cells,
+                enabledShares = enabledShares,
+                hideRecent = hideRecent,
+                error = error,
+                scroll = todayScroll,
+                onRelogin = onRelogin,
+                onShowRecord = { showRecord = true },
+                onToggleShare = { id ->
+                    val enabled = store.shareTaskEnabled(id)
+                    store.setShareTaskEnabled(id, !enabled)
+                    enabledShares = store.enabledShares()
                 },
             )
-            Spacer(Modifier.height(12.dp))
+
+            HomeTab.Settings -> SettingsTab(
+                permissions = permissions,
+                scheduled = scheduled,
+                nextAt = nextAt,
+                startHour = startHour,
+                endHour = endHour,
+                hideRecent = hideRecent,
+                appearance = appearance,
+                error = error,
+                scroll = settingsScroll,
+                onToggleScheduled = { enabled ->
+                    scheduled = enabled
+                    store.setScheduled(enabled)
+                    nextAt = if (enabled) Scheduler.scheduleNext(context) else {
+                        Scheduler.cancel(context)
+                        0L
+                    }
+                },
+                onWindow = { newStart, newEnd ->
+                    startHour = newStart
+                    endHour = newEnd
+                    store.setWindow(newStart, newEnd)
+                    if (scheduled) nextAt = Scheduler.scheduleNext(context)
+                },
+                onToggleHideRecent = { enabled ->
+                    if (enabled) {
+                        askHideRecent = true
+                    } else {
+                        store.setHideFromRecents(false)
+                        hideRecent = false
+                    }
+                },
+                onFix = { target ->
+                    when (target) {
+                        "notify" -> openAppSettings(context)
+                        "battery" -> requestIgnoreBattery(context)
+                        "alarm" -> requestExactAlarm(context)
+                    }
+                },
+                onAutostart = { startupHelp = true },
+                onAppearanceChange = onAppearanceChange,
+                onAbout = { showAbout = true },
+                onLogout = onLogout,
+                onExpiredRelogin = onRelogin,
+                onFixPermissions = { permissions = readPermissions(context) },
+            )
         }
-        HeroCard(today = todayRecord, last = record, nextAt = nextAt, scheduled = scheduled, startHour = startHour, endHour = endHour)
-        Spacer(Modifier.height(14.dp))
-        TasksCard(
-            today = todayRecord,
-            enabledShares = enabledShares,
-            onToggleShare = { id, enabled ->
-                store.setShareTaskEnabled(id, enabled)
-                enabledShares = store.enabledShares()
-            },
+
+        BottomBar(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            tab = tab,
+            running = running,
+            stage = stage,
+            launching = launching,
+            showCta = tab == HomeTab.Today,
+            onRun = runNow,
+            onTab = { tab = it },
         )
-        Spacer(Modifier.height(14.dp))
-        ScheduleCard(
-            scheduled = scheduled,
-            nextAt = nextAt,
-            startHour = startHour,
-            endHour = endHour,
-            onToggle = { enabled ->
-                scheduled = enabled
-                store.setScheduled(enabled)
-                if (enabled) {
-                    nextAt = Scheduler.scheduleNext(context)
-                } else {
-                    Scheduler.cancel(context)
-                    nextAt = 0L
-                }
-            },
-            onWindow = { newStart, newEnd ->
-                startHour = newStart
-                endHour = newEnd
-                store.setWindow(newStart, newEnd)
-                if (scheduled) nextAt = Scheduler.scheduleNext(context)
-            },
-        )
-        Spacer(Modifier.height(14.dp))
-        PermissionsCard(
-            permissions = permissions,
-            hideRecent = hideRecent,
-            onToggleHide = { enabled ->
-                if (enabled) {
-                    askHideRecent = true
-                } else {
-                    store.setHideFromRecents(false)
-                    hideRecent = false
-                }
-            },
-            onFix = { target ->
-                when (target) {
-                    "notify" -> openAppSettings(context)
-                    "battery" -> requestIgnoreBattery(context)
-                    "alarm" -> requestExactAlarm(context)
-                }
-            },
-            onAutostart = { startupHelp = true },
-        )
+
         if (askHideRecent) {
             AlertDialog(
                 onDismissRequest = { askHideRecent = false },
@@ -303,6 +348,7 @@ fun HomeScreen(
                 },
             )
         }
+
         if (startupHelp) {
             AlertDialog(
                 onDismissRequest = { startupHelp = false },
@@ -331,431 +377,768 @@ fun HomeScreen(
                 },
             )
         }
-        Spacer(Modifier.height(14.dp))
-        AppearanceCard(
-            appearance = appearance,
-            darkTheme = darkTheme,
-            onChange = onAppearanceChange,
-        )
-        Spacer(Modifier.height(14.dp))
-        HistoryCard(
-            history = history,
-            expanded = historyOpen,
-            onToggle = { historyOpen = !historyOpen },
-        )
-
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = {
-                if (RunLock.isBusy()) {
-                    error = "已有一次任务在执行，本次忽略"
-                    return@Button
-                }
-                error = null
-                launching = true
-                runCatching { CheckInService.start(context, force = true) }
-                    .onFailure {
-                        launching = false
-                        error = "无法启动执行服务：${describe(it)}"
-                    }
-            },
-            enabled = !running && !launching,
-            shape = RoundedCornerShape(100.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Ink.accent,
-                contentColor = Ink.onAccent,
-                disabledContainerColor = Ink.raised,
-                disabledContentColor = Ink.muted,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-        ) {
-            Text(if (running) stage.ifEmpty { "执行中" } else "立即执行一次", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-        }
-
-        if (running) {
-            Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                color = Ink.accent,
-                trackColor = Ink.line,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-            )
-        }
-        error?.let {
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("×", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-            }
-        }
-
-        Spacer(Modifier.height(30.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onLogout) {
-                    Text("退出登录", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
-                }
-                TextButton(onClick = { showAbout = true }) {
-                    Text("关于", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Text(
-                "${permissions.readyCount}/3 权限就绪",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (permissions.readyCount == 3) Ink.muted else Ink.accent,
-                modifier = Modifier.padding(top = 14.dp),
-            )
-        }
     }
 }
 
-@Composable
-private fun StatusChip(status: String, running: Boolean) {
-    val color = when {
-        running -> Ink.accent
-        status == "今日已完成" -> Ink.accent
-        status == "未完成" -> MaterialTheme.colorScheme.error
-        else -> Ink.muted
-    }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        modifier = Modifier
-            .border(1.dp, Ink.line, RoundedCornerShape(100.dp))
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .alpha(if (running) PulseAlpha() else 1f)
-                .background(color, RoundedCornerShape(100.dp)),
-        )
-        Text(status, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 11.sp)
-    }
-}
-
-/** 执行中状态点的呼吸，唯一一处动效，只为说明「还在跑」。 */
-@Composable
-private fun PulseAlpha(): Float {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val value by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900), repeatMode = RepeatMode.Reverse),
-        label = "alpha",
-    )
-    return value
-}
+/* ------------------------------------------------------------------ 今天 */
 
 @Composable
-private fun HeroCard(
-    today: RunRecord?,
-    last: RunRecord?,
-    nextAt: Long,
+private fun TodayTab(
+    config: HeyboxConfig,
+    status: String,
+    running: Boolean,
+    expired: Boolean,
     scheduled: Boolean,
+    nextAt: Long,
     startHour: Int,
     endHour: Int,
+    today: RunRecord?,
+    cells: List<WeekCell>,
+    enabledShares: Set<String>,
+    hideRecent: Boolean,
+    error: String?,
+    scroll: androidx.compose.foundation.ScrollState,
+    onRelogin: () -> Unit,
+    onShowRecord: () -> Unit,
+    onToggleShare: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(28.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(28.dp))
-            .padding(20.dp),
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = TAB_BOTTOM),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("今日到账", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(formatDay(System.currentTimeMillis()), style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-            StatCell("经验", deltaText(today, today?.expDelta), Modifier.weight(1f))
-            VerticalRule()
-            StatCell("H 币", deltaText(today, today?.coinDelta), Modifier.weight(1f))
-            VerticalRule()
-            StatCell("电池", deltaText(today, today?.batteryDelta), Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            when {
-                last == null -> "尚未同步 · 点下方按钮跑一次"
-                today == null -> "今天还没跑过 · 上次 ${formatTime(last.at)}，下面是那次的余额"
-                !today.executed -> "今天已由其它入口完成，本次没有重复执行"
-                else -> "上面是本次执行带来的增量，下一行是账户当前余额"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-        )
-        Spacer(Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("账户余额", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(balanceText(last), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
-        }
-        Spacer(Modifier.height(16.dp))
-        HorizontalDivider(color = Ink.line, thickness = 1.dp)
-        Spacer(Modifier.height(14.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
+            verticalAlignment = Alignment.Top,
         ) {
             Column {
-                Text("下一次", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-                Spacer(Modifier.height(6.dp))
-                if (scheduled && nextAt > 0L) {
-                    Text(formatTime(nextAt), style = NumberSmall, color = Ink.ink, fontSize = 17.sp)
-                } else if (scheduled) {
-                    Text("尚未排定", style = NumberSmall, color = Ink.muted, fontSize = 17.sp)
-                } else {
-                    Text("定时未开启", style = NumberSmall, color = Ink.muted, fontSize = 17.sp)
-                }
-            }
-            Text(
-                if (scheduled) "随机窗口 ${hourLabel(startHour)}–${hourLabel(endHour)}" else "打开下方开关即可托管",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-            )
-        }
-    }
-}
-
-/** 增量只在「本次真的执行过」时才有意义；余额那组数字不能当收益看。 */
-private fun deltaText(record: RunRecord?, value: Long?): String {
-    if (record == null || !record.executed || value == null) return "—"
-    return if (value >= 0) "+$value" else value.toString()
-}
-
-private fun balanceText(record: RunRecord?): String {
-    if (record == null) return "H 币 — · 电池 — · 经验 —"
-    return buildString {
-        append("H 币 ${record.coin}")
-        append(" · 电池 ${record.battery?.toString() ?: "—"}")
-        val level = record.level
-        if (level != null) {
-            append(" · Lv $level ${record.exp}")
-            record.maxExp?.let { append("/$it") }
-        } else {
-            append(" · 经验 ${record.exp}")
-        }
-    }
-}
-
-@Composable
-private fun StatCell(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(value, style = NumberStyle, color = Ink.ink)
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-    }
-}
-
-@Composable
-private fun VerticalRule() {
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 12.dp)
-            .width(1.dp)
-            .height(44.dp)
-            .background(Ink.line),
-    )
-}
-
-@Composable
-private fun TasksCard(
-    today: RunRecord?,
-    enabledShares: Set<String>,
-    onToggleShare: (String, Boolean) -> Unit,
-) {
-    val rows = listOf("sign" to "签到", "1" to "分享帖子", "19" to "分享游戏", "31" to "分享游戏评价")
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("每日四件", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(
-                if (today == null) "今天 · 尚未执行" else "今天",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
-            )
-        }
-        Spacer(Modifier.height(2.dp))
-        Text(
-            "签到始终执行；分享任务默认关闭，想要就自己打开",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-            fontSize = 11.sp,
-        )
-        Spacer(Modifier.height(4.dp))
-        rows.forEachIndexed { index, (id, name) ->
-            if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
-            val state = when (id) {
-                "sign" -> if (today?.signed == true) "finish" else today?.taskStates?.get(id)
-                else -> today?.taskStates?.get(id)
-            }
-            if (id == "sign") {
-                TaskRow(name, state)
-            } else {
-                val enabled = id in enabledShares
-                TaskRow(
-                    name = name,
-                    state = state,
-                    toggleable = true,
-                    enabled = enabled,
-                    onToggle = { onToggleShare(id, !enabled) },
+                Text(
+                    "盒签",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Ink.ink,
+                    fontSize = 22.sp,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "heybox_id ${config.session.heyboxId}",
+                    style = NumberTiny,
+                    color = Ink.muted,
                 )
             }
         }
+
+        if (expired) {
+            Spacer(Modifier.height(14.dp))
+            ExpiredBanner(onRelogin)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        StatusRow(status = status, running = running)
+
+        Spacer(Modifier.height(18.dp))
+        Text("今日到账", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+        Spacer(Modifier.height(6.dp))
+        Figures(today)
+
+        Spacer(Modifier.height(8.dp))
+        Text(balanceText(today), style = NumberTiny, color = Ink.muted)
+
+        Spacer(Modifier.height(18.dp))
+        WindowBlock(
+            scheduled = scheduled,
+            nextAt = nextAt,
+            startHour = startHour,
+            endHour = endHour,
+        )
+
+        Spacer(Modifier.height(20.dp))
+        SectionHead(title = "每日四件", hint = if (today == null) "今天 · 尚未执行" else "今天")
+        Spacer(Modifier.height(10.dp))
+        TaskTiles(
+            today = today,
+            enabledShares = enabledShares,
+            onToggleShare = onToggleShare,
+        )
+
+        Spacer(Modifier.height(20.dp))
+        SectionHead(
+            title = "最近七天",
+            hint = "全部记录",
+            onHint = onShowRecord,
+        )
+        Spacer(Modifier.height(10.dp))
+        WeekRow(cells)
+
+        if (hideRecent) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "最近任务隐藏已开启：离开 App 会结束任务，多任务里不留卡片。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                fontSize = 11.sp,
+            )
+        }
+
+        error?.let {
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
     }
 }
 
 @Composable
-private fun TaskRow(
-    name: String,
-    state: String?,
-    toggleable: Boolean = false,
-    enabled: Boolean = true,
-    onToggle: () -> Unit = {},
-) {
-    val done = enabled && state == "finish"
+private fun StatusRow(status: String, running: Boolean) {
+    val color = when {
+        running -> Ink.accent
+        status == "今日已完成" || status == "今日已签到" -> Ink.success
+        status == "未完成" -> MaterialTheme.colorScheme.error
+        else -> Ink.muted
+    }
+    val alpha = if (running) {
+        val transition = rememberInfiniteTransition(label = "dot")
+        transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+            label = "dotAlpha",
+        ).value
+    } else {
+        1f
+    }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            name,
-            style = MaterialTheme.typography.titleMedium,
-            color = if (done) Ink.ink else Ink.muted,
+        Box(
+            Modifier
+                .size(9.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = alpha)),
         )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (toggleable) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(100.dp))
-                        .border(
-                            1.dp,
-                            if (enabled) Ink.accent else Ink.line,
-                            RoundedCornerShape(100.dp),
-                        )
-                        .clickable(onClick = onToggle)
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
-                ) {
-                    Text(
-                        if (enabled) "开" else "关",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (enabled) Ink.accent else Ink.muted,
-                        fontSize = 11.sp,
-                    )
-                }
-            }
-            if (done) {
-                Text("✓", style = MaterialTheme.typography.labelSmall, color = Ink.accent, fontSize = 11.sp)
-            }
-            Text(
-                when {
-                    !enabled -> "已关闭"
-                    state == "finish" -> "已完成"
-                    state == "waiting" -> "待执行"
-                    state == null -> "—"
-                    else -> state
-                },
-                style = NumberSmall,
-                color = Ink.muted,
+        Spacer(Modifier.width(9.dp))
+        Text(
+            status,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Ink.ink,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(formatDay(System.currentTimeMillis()), style = MaterialTheme.typography.bodySmall, color = Ink.muted, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun Figures(today: RunRecord?) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Figure("经验", deltaText(today, today?.expDelta), Modifier.weight(1f), first = true)
+        Figure("H 币", deltaText(today, today?.coinDelta), Modifier.weight(1f), first = false)
+        Figure("电池", deltaText(today, today?.batteryDelta), Modifier.weight(1f), first = false)
+    }
+}
+
+@Composable
+private fun RowScope.Figure(name: String, value: String, modifier: Modifier, first: Boolean) {
+    Row(modifier = modifier) {
+        if (!first) {
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(38.dp)
+                    .background(Ink.line),
+            )
+        }
+        Column(modifier = Modifier.padding(start = if (first) 0.dp else 14.dp)) {
+            Text(value, style = NumberStyle, color = Ink.ink)
+            Spacer(Modifier.height(3.dp))
+            Text(name, style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+        }
+    }
+}
+
+@Composable
+private fun WindowBlock(scheduled: Boolean, nextAt: Long, startHour: Int, endHour: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text("下次执行", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+        Text(
+            when {
+                !scheduled -> "定时未开启"
+                nextAt > 0L -> formatTime(nextAt)
+                else -> "尚未排定"
+            },
+            style = NumberSmall,
+            color = if (scheduled && nextAt > 0L) Ink.ink else Ink.muted,
+            fontSize = 15.sp,
+        )
+    }
+    Spacer(Modifier.height(10.dp))
+    val fraction = trackFraction(nextAt, scheduled, startHour, endHour)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Ink.accent.copy(alpha = 0.18f)),
+        )
+        if (fraction != null) {
+            val x = maxWidth * fraction
+            Box(
+                Modifier
+                    .offset(x = x - 5.5.dp, y = (-2.5).dp)
+                    .size(11.dp)
+                    .clip(CircleShape)
+                    .background(Ink.accent),
+            )
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(hourLabel(startHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+        Text("随机窗口", style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+        Text(hourLabel(endHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+    }
+}
+
+private fun previewNextRun(): Long = java.util.Calendar.getInstance().apply {
+    add(java.util.Calendar.DAY_OF_YEAR, 1)
+    set(java.util.Calendar.HOUR_OF_DAY, 17)
+    set(java.util.Calendar.MINUTE, 14)
+    set(java.util.Calendar.SECOND, 0)
+    set(java.util.Calendar.MILLISECOND, 0)
+}.timeInMillis
+
+private fun trackFraction(nextAt: Long, scheduled: Boolean, startHour: Int, endHour: Int): Float? {
+    if (!scheduled || nextAt <= 0L) return null
+    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nextAt }
+    val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY) + calendar.get(java.util.Calendar.MINUTE) / 60f
+    val span = (endHour - startHour).toFloat()
+    if (span <= 0f) return null
+    return ((hour - startHour) / span).coerceIn(0.02f, 0.98f)
+}
+
+@Composable
+private fun SectionHead(title: String, hint: String, onHint: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text(title, style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+        Text(
+            hint,
+            style = if (onHint != null) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
+            color = if (onHint != null) Ink.accent else Ink.muted,
+            fontSize = if (onHint != null) 12.sp else 11.sp,
+            modifier = if (onHint != null) Modifier.clickable(onClick = onHint) else Modifier,
+        )
+    }
+}
+
+@Composable
+private fun TaskTiles(today: RunRecord?, enabledShares: Set<String>, onToggleShare: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SignTile(state = taskState(today, "sign", today?.signed == true), modifier = Modifier.weight(1f))
+            ShareTile(
+                name = "分享帖子",
+                state = taskState(today, SHARE_POST, false),
+                enabled = SHARE_POST in enabledShares,
+                onToggle = { onToggleShare(SHARE_POST) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ShareTile(
+                name = "分享游戏",
+                state = taskState(today, SHARE_GAME, false),
+                enabled = SHARE_GAME in enabledShares,
+                onToggle = { onToggleShare(SHARE_GAME) },
+                modifier = Modifier.weight(1f),
+            )
+            ShareTile(
+                name = "分享游戏评价",
+                state = taskState(today, SHARE_REVIEW, false),
+                enabled = SHARE_REVIEW in enabledShares,
+                onToggle = { onToggleShare(SHARE_REVIEW) },
+                modifier = Modifier.weight(1f),
             )
         }
     }
 }
 
 @Composable
-private fun ScheduleCard(
-    scheduled: Boolean,
-    nextAt: Long,
-    startHour: Int,
-    endHour: Int,
-    onToggle: (Boolean) -> Unit,
-    onWindow: (Int, Int) -> Unit,
-) {
+private fun Tile(name: String, state: String, modifier: Modifier, trailing: @Composable () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
+            .height(86.dp)
             .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(14.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
+        Text(name, style = MaterialTheme.typography.titleMedium, color = Ink.ink, fontSize = 14.sp)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text("每天自动签到", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    when {
-                        scheduled && nextAt > 0L -> "下次 ${formatTime(nextAt)} · 每天重新随机"
-                        scheduled -> "已开启，但系统暂未允许排定 · 检查精确闹钟权限"
-                        else -> "关闭中 · 不会自动执行"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ink.muted,
+            Text(
+                state,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state == "已完成") Ink.success else Ink.muted,
+                fontSize = 11.5.sp,
+            )
+            trailing()
+        }
+    }
+}
+
+@Composable
+private fun SignTile(state: String, modifier: Modifier) {
+    Tile(name = "签到", state = state, modifier = modifier) {
+        if (state == "已完成") CheckBadge()
+    }
+}
+
+@Composable
+private fun ShareTile(name: String, state: String, enabled: Boolean, onToggle: () -> Unit, modifier: Modifier) {
+    Tile(name = name, state = state, modifier = modifier) {
+        SmallSwitch(checked = enabled, onToggle = onToggle)
+    }
+}
+
+@Composable
+private fun CheckBadge() {
+    val success = Ink.success
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(success.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(11.dp)) {
+            val path = Path().apply {
+                moveTo(size.width * 0.15f, size.height * 0.56f)
+                lineTo(size.width * 0.38f, size.height * 0.8f)
+                lineTo(size.width * 0.85f, size.height * 0.24f)
+            }
+            drawPath(
+                path,
+                color = success,
+                style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SmallSwitch(checked: Boolean, onToggle: () -> Unit) {
+    Switch(
+        checked = checked,
+        onCheckedChange = { onToggle() },
+        colors = switchColors(),
+        modifier = Modifier.size(width = 40.dp, height = 24.dp),
+    )
+}
+
+@Composable
+private fun WeekRow(cells: List<WeekCell>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        cells.forEach { cell -> DayCell(cell) }
+    }
+}
+
+@Composable
+private fun DayCell(cell: WeekCell) {
+    val accent = when (cell.state) {
+        DayState.DONE -> Ink.success
+        DayState.FAILED -> Ink.error
+        DayState.SKIPPED, DayState.NONE -> Ink.muted
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(38.dp)) {
+        Text(cell.weekday, style = MaterialTheme.typography.labelSmall, color = Ink.muted, fontSize = 10.sp)
+        Spacer(Modifier.height(5.dp))
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (cell.today) Ink.success.copy(alpha = 0.14f) else Ink.surface)
+                .border(1.dp, if (cell.today) Ink.success.copy(alpha = 0.14f) else Ink.line, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            when (cell.state) {
+                DayState.DONE -> MiniCheck(accent)
+                DayState.SKIPPED, DayState.FAILED, DayState.NONE ->
+                    Text("–", style = NumberTiny, color = accent.copy(alpha = 0.7f))
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(cell.monthDay, style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun MiniCheck(color: androidx.compose.ui.graphics.Color) {
+    Canvas(Modifier.size(12.dp)) {
+        val path = Path().apply {
+            moveTo(size.width * 0.15f, size.height * 0.53f)
+            lineTo(size.width * 0.42f, size.height * 0.8f)
+            lineTo(size.width * 0.86f, size.height * 0.22f)
+        }
+        drawPath(
+            path,
+            color = color,
+            style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+    }
+}
+
+/* ------------------------------------------------------------------ 设置 */
+
+@Composable
+private fun SettingsTab(
+    permissions: Permissions,
+    scheduled: Boolean,
+    nextAt: Long,
+    startHour: Int,
+    endHour: Int,
+    hideRecent: Boolean,
+    appearance: String,
+    error: String?,
+    scroll: androidx.compose.foundation.ScrollState,
+    onToggleScheduled: (Boolean) -> Unit,
+    onWindow: (Int, Int) -> Unit,
+    onToggleHideRecent: (Boolean) -> Unit,
+    onFix: (String) -> Unit,
+    onAutostart: () -> Unit,
+    onAppearanceChange: (String) -> Unit,
+    onAbout: () -> Unit,
+    onLogout: () -> Unit,
+    onExpiredRelogin: () -> Unit,
+    onFixPermissions: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll)
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 96.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text("设置", style = MaterialTheme.typography.headlineMedium, color = Ink.ink)
+            Text(
+                "${permissions.readyCount}/3 权限就绪",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (permissions.readyCount == 3) Ink.muted else Ink.accent,
+                modifier = Modifier.clickable(onClick = onFixPermissions),
+            )
+        }
+
+        GroupLabel("自动", first = true)
+        Card {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("每天自动签到", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        when {
+                            scheduled && nextAt > 0L -> "下次 ${formatTime(nextAt)} · 每天重新随机"
+                            scheduled -> "已开启，但系统暂未允许排定 · 检查精确闹钟权限"
+                            else -> "关闭中 · 不会自动执行"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ink.muted,
+                        fontSize = 11.5.sp,
+                    )
+                }
+                Switch(
+                    checked = scheduled,
+                    onCheckedChange = onToggleScheduled,
+                    colors = switchColors(),
                 )
             }
-            Switch(
-                checked = scheduled,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Ink.onAccent,
-                    checkedTrackColor = Ink.accent,
-                    uncheckedThumbColor = Ink.muted,
-                    uncheckedTrackColor = Ink.raised,
-                    uncheckedBorderColor = Ink.line,
-                ),
-            )
-        }
-        Spacer(Modifier.height(14.dp))
-        HorizontalDivider(color = Ink.line, thickness = 1.dp)
-        Spacer(Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("执行时段", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+            HorizontalDivider(color = Ink.line, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("执行时段", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+                Text(
+                    "${hourLabel(startHour)} → ${hourLabel(endHour)}",
+                    style = NumberSmall,
+                    color = Ink.ink,
+                    fontSize = 14.sp,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HourStepper(
+                    label = "开始",
+                    hour = startHour,
+                    canDec = startHour > 0,
+                    canInc = startHour + 2 <= endHour,
+                    modifier = Modifier.weight(1f),
+                    onChange = { onWindow(it, endHour) },
+                )
+                HourStepper(
+                    label = "结束",
+                    hour = endHour,
+                    canDec = endHour - 2 >= startHour,
+                    canInc = endHour < 24,
+                    modifier = Modifier.weight(1f),
+                    onChange = { onWindow(startHour, it) },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
-                "${hourLabel(startHour)} → ${hourLabel(endHour)}",
-                style = NumberSmall,
-                color = Ink.ink,
+                "每天在时段内随机挑一刻，不会固定在同一个时间；改完立即重排。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                fontSize = 11.sp,
             )
         }
+
+        GroupLabel("值守")
+        Card {
+            Text("值守条件", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+            Spacer(Modifier.height(4.dp))
+            PermissionRow("通知权限", permissions.notify, "开启", onClick = { onFix("notify") })
+            PermissionRow("忽略电池优化", permissions.battery, "去设置", onClick = { onFix("battery") })
+            PermissionRow("精确闹钟", permissions.exactAlarm, "去设置", onClick = { onFix("alarm") })
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 11.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        Modifier
+                            .padding(top = 7.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Ink.accent),
+                    )
+                    Column {
+                        Text("自启动 / 后台运行", style = MaterialTheme.typography.bodyMedium, color = Ink.ink)
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "系统读不到这个开关，只能自己去确认",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Ink.muted,
+                            fontSize = 11.5.sp,
+                        )
+                    }
+                }
+                Text(
+                    "去设置",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.accent,
+                    modifier = Modifier
+                        .clickable(onClick = onAutostart)
+                        .padding(start = 12.dp, top = 2.dp),
+                )
+            }
+        }
+
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HourStepper(
-                label = "开始",
-                hour = startHour,
-                canDec = startHour > 0,
-                canInc = startHour + 2 <= endHour,
-                modifier = Modifier.weight(1f),
-                onChange = { onWindow(it, endHour) },
-            )
-            HourStepper(
-                label = "结束",
-                hour = endHour,
-                canDec = endHour - 2 >= startHour,
-                canInc = endHour < 24,
-                modifier = Modifier.weight(1f),
-                onChange = { onWindow(startHour, it) },
+        Card {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("最近任务隐藏", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        "离开时结束任务，多任务里不留卡片",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ink.muted,
+                        fontSize = 11.5.sp,
+                    )
+                }
+                Switch(
+                    checked = hideRecent,
+                    onCheckedChange = onToggleHideRecent,
+                    colors = switchColors(),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "开启前先锁定卡片，否则卡片消失时系统可能连带回收进程，定时闹钟也会失效。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                fontSize = 11.sp,
             )
         }
-        Spacer(Modifier.height(8.dp))
+
+        GroupLabel("显示")
+        Card {
+            Text("外观", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Ink.raised, RoundedCornerShape(14.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                SegmentedOption("跟随系统", appearance == "auto", Modifier.weight(1f)) { onAppearanceChange("auto") }
+                SegmentedOption("白天", appearance == "light", Modifier.weight(1f)) { onAppearanceChange("light") }
+                SegmentedOption("夜间", appearance == "dark", Modifier.weight(1f)) { onAppearanceChange("dark") }
+            }
+        }
+
+        GroupLabel("其他")
+        Card {
+            ChevronRow("关于盒签", onClick = onAbout)
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            ChevronRow("退出登录", onClick = onLogout)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "盒签 ${com.heybox.checkin.BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                fontSize = 11.sp,
+            )
+        }
+
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (permissions.readyCount < 3) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "有 ${3 - permissions.readyCount} 项权限未就绪，夜间可能被系统清掉。",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.accent,
+                fontSize = 11.sp,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
-            "每天在时段内随机挑一刻，不会固定在同一个时间；改完立即重排。",
+            "重登只在登录过期时使用",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
+            fontSize = 11.sp,
+            modifier = Modifier.clickable(onClick = onExpiredRelogin),
+        )
+    }
+}
+
+@Composable
+private fun GroupLabel(text: String, first: Boolean = false) {
+    Spacer(Modifier.height(if (first) 18.dp else 20.dp))
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = Ink.muted,
+        modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun Card(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Ink.surface, RoundedCornerShape(20.dp))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun PermissionRow(name: String, ok: Boolean, action: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 11.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (ok) Ink.success else Ink.accent),
+            )
+            Text(name, style = MaterialTheme.typography.bodyMedium, color = Ink.ink)
+        }
+        if (ok) {
+            Text("已就绪", style = MaterialTheme.typography.bodySmall, color = Ink.muted, fontSize = 12.sp)
+        } else {
+            Text(
+                action,
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.accent,
+                modifier = Modifier.clickable(onClick = onClick),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChevronRow(text: String, onClick: () -> Unit) {
+    val muted = Ink.muted
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleMedium, color = Ink.ink)
+        Canvas(Modifier.size(8.dp, 13.dp)) {
+            val path = Path().apply {
+                moveTo(size.width * 0.2f, size.height * 0.12f)
+                lineTo(size.width * 0.8f, size.height * 0.5f)
+                lineTo(size.width * 0.2f, size.height * 0.88f)
+            }
+            drawPath(
+                path,
+                color = muted,
+                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentedOption(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Ink.surface else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selected) Ink.ink else Ink.muted,
+            fontSize = 13.sp,
         )
     }
 }
@@ -771,15 +1154,14 @@ private fun HourStepper(
 ) {
     Row(
         modifier = modifier
-            .background(Ink.raised, RoundedCornerShape(10.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(10.dp))
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .background(Ink.raised, RoundedCornerShape(14.dp))
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         StepButton("−", canDec) { onChange(hour - 1) }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(hourLabel(hour), style = NumberSmall, color = Ink.ink)
+            Text(hourLabel(hour), style = NumberSmall, color = Ink.ink, fontSize = 14.sp)
             Text(label, style = MaterialTheme.typography.labelSmall, color = Ink.muted, fontSize = 9.sp)
         }
         StepButton("+", canInc) { onChange(hour + 1) }
@@ -790,9 +1172,9 @@ private fun HourStepper(
 private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(32.dp)
-            .background(if (enabled) Ink.surface else Ink.raised, RoundedCornerShape(8.dp))
-            .border(1.dp, if (enabled) Ink.line else Ink.line, RoundedCornerShape(8.dp))
+            .size(30.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (enabled) Ink.surface else Ink.raised)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -804,283 +1186,299 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+/* ------------------------------------------------------------- 底部导航 */
+
 @Composable
-private fun HistoryCard(history: List<RunRecord>, expanded: Boolean, onToggle: () -> Unit) {
+private fun BottomBar(
+    modifier: Modifier = Modifier,
+    tab: HomeTab,
+    running: Boolean,
+    stage: String,
+    launching: Boolean,
+    showCta: Boolean,
+    onRun: () -> Unit,
+    onTab: (HomeTab) -> Unit,
+) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+            .background(Ink.canvas)
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp),
     ) {
+        if (showCta) {
+            Button(
+                onClick = onRun,
+                enabled = !running && !launching,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Ink.ink,
+                    contentColor = Ink.onInk,
+                    disabledContainerColor = Ink.raised,
+                    disabledContentColor = Ink.muted,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                Text(
+                    if (running) stage.ifEmpty { "执行中" } else "立即执行一次",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                )
+            }
+            if (running) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    color = Ink.accent,
+                    trackColor = Ink.line,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp),
+                )
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(top = if (showCta) 10.dp else 0.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Text("最近七天", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(
-                if (expanded) "收起" else if (history.isEmpty()) "还没有记录" else "展开",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (history.isEmpty()) Ink.muted else Ink.accent,
-            )
-        }
-        if (expanded) {
-            if (history.isEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Text("明天跑完第一笔后，这里会按天累积。", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
-            } else {
-                history.take(7).forEachIndexed { index, run ->
-                    if (index == 0) Spacer(Modifier.height(4.dp)) else HorizontalDivider(color = Ink.line, thickness = 1.dp)
-                    HistoryRow(run)
-                }
-            }
-        } else if (history.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            HistoryRow(history.first())
+            TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
+            TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
         }
     }
 }
 
+private enum class TabIcon { Today, Settings }
+
 @Composable
-private fun HistoryRow(run: RunRecord) {
+private fun TabItem(label: String, selected: Boolean, icon: TabIcon, onClick: () -> Unit) {
+    val color = if (selected) Ink.ink else Ink.muted
+    val canvasColor = Ink.canvas
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+    ) {
+        Canvas(Modifier.size(20.dp)) {
+            val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val w = size.width
+            when (icon) {
+                TabIcon.Today -> {
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(w * 0.14f, w * 0.2f),
+                        size = Size(w * 0.72f, w * 0.66f),
+                        cornerRadius = CornerRadius(w * 0.18f),
+                        style = stroke,
+                    )
+                    drawLine(color, Offset(w * 0.33f, w * 0.09f), Offset(w * 0.33f, w * 0.3f), 1.5.dp.toPx(), StrokeCap.Round)
+                    drawLine(color, Offset(w * 0.67f, w * 0.09f), Offset(w * 0.67f, w * 0.3f), 1.5.dp.toPx(), StrokeCap.Round)
+                    val path = Path().apply {
+                        moveTo(w * 0.33f, w * 0.55f)
+                        lineTo(w * 0.46f, w * 0.68f)
+                        lineTo(w * 0.7f, w * 0.42f)
+                    }
+                    drawPath(path, color, style = stroke)
+                }
+
+                TabIcon.Settings -> {
+                    drawLine(color, Offset(w * 0.12f, w * 0.34f), Offset(w * 0.88f, w * 0.34f), 1.5.dp.toPx(), StrokeCap.Round)
+                    drawLine(color, Offset(w * 0.12f, w * 0.68f), Offset(w * 0.88f, w * 0.68f), 1.5.dp.toPx(), StrokeCap.Round)
+                    drawCircle(color = canvasColor, radius = w * 0.11f, center = Offset(w * 0.38f, w * 0.34f))
+                    drawCircle(color = color, radius = w * 0.11f, center = Offset(w * 0.38f, w * 0.34f), style = stroke)
+                    drawCircle(color = canvasColor, radius = w * 0.11f, center = Offset(w * 0.64f, w * 0.68f))
+                    drawCircle(color = color, radius = w * 0.11f, center = Offset(w * 0.64f, w * 0.68f), style = stroke)
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.5.sp, letterSpacing = 0.sp)
+    }
+}
+
+/* ---------------------------------------------------------------- 记录 */
+
+@Composable
+fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
+    androidx.activity.compose.BackHandler { onBack() }
+    val cells = weekCells(history, System.currentTimeMillis()).reversed()
+    val done = cells.count { it.state == DayState.DONE }
+    val skipped = cells.count { it.state == DayState.SKIPPED }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+    ) {
+        Spacer(Modifier.height(8.dp))
+        TextButton(
+            onClick = onBack,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        ) {
+            Text("← 返回", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("记录", style = MaterialTheme.typography.displayLarge, color = Ink.ink)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "最近七天 · 完成 $done 天" + if (skipped > 0) "，跳过 $skipped 天" else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.muted,
+            fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Ink.surface, RoundedCornerShape(20.dp))
+                .padding(horizontal = 18.dp, vertical = 2.dp),
+        ) {
+            cells.forEachIndexed { index, cell ->
+                if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
+                RecordRow(cell)
+            }
+        }
+        Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun RecordRow(cell: WeekCell) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 11.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(formatMonthDay(run.at), style = NumberSmall, color = Ink.ink, fontSize = 14.sp)
-        Text(
-            if (run.executed) "经验 ${run.expDelta?.let { "+$it" } ?: "—"} · H 币 +${run.coinDelta}" else "未执行（已由其它入口完成）",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-            modifier = Modifier.weight(1f).padding(start = 14.dp),
-        )
-        Text(
-            if (run.signed) "✓" else "—",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (run.signed) Ink.accent else Ink.muted,
-        )
+        Column(modifier = Modifier.width(54.dp)) {
+            Text(cell.monthDay, style = NumberTiny, color = Ink.ink, fontSize = 13.sp)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "周${cell.weekday}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ink.muted,
+                fontSize = 10.sp,
+                letterSpacing = 0.sp,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                when (cell.state) {
+                    DayState.DONE -> recordDeltaText(cell)
+                    DayState.SKIPPED -> "未执行（已由其它入口完成）"
+                    DayState.FAILED -> "执行了，但签到没成功"
+                    DayState.NONE -> "未执行"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (cell.state == DayState.DONE) Ink.ink else Ink.muted,
+                fontSize = 12.5.sp,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                when {
+                    cell.state == DayState.SKIPPED -> "检测到当日已签到，没有重复执行"
+                    cell.state == DayState.FAILED -> "检查当天日志或重新执行一次"
+                    cell.executed && cell.time != null -> "${cell.time} 执行"
+                    else -> "当天没有记录"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = Ink.muted,
+                fontSize = 11.sp,
+                letterSpacing = 0.sp,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        when (cell.state) {
+            DayState.DONE -> MiniCheck(Ink.success)
+            DayState.FAILED -> Text("–", style = NumberTiny, color = Ink.error)
+            DayState.SKIPPED, DayState.NONE -> Text("–", style = NumberTiny, color = Ink.line)
+        }
     }
 }
+
+private fun recordDeltaText(cell: WeekCell): String {
+    val exp = cell.expDelta?.let { if (it >= 0) "+$it" else "$it" } ?: "—"
+    val battery = cell.batteryDelta?.let { if (it >= 0) " · 电池 +$it" else "" } ?: ""
+    return "经验 $exp · H 币 +${cell.coinDelta}$battery"
+}
+
+/* ---------------------------------------------------------------- 组件 */
 
 @Composable
 private fun ExpiredBanner(onRelogin: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .background(Ink.error.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("登录已过期", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(4.dp))
-            Text("自动签到会一直失败，重新登录即可恢复", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+            Text("登录已过期", style = MaterialTheme.typography.bodyMedium, color = Ink.error, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "自动签到会一直失败，重新登录即可恢复",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                fontSize = 11.5.sp,
+            )
         }
         Text(
             "重新登录",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = Ink.accent,
             modifier = Modifier
                 .clickable(onClick = onRelogin)
-                .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 12.dp),
         )
     }
 }
 
 @Composable
-private fun SchedulePromptBanner(onEnable: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("自动签到还没开启", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
-            Spacer(Modifier.height(4.dp))
-            Text("开一次就不用再管，时间每天随机", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
-        }
-        Text(
-            "开启",
-            style = MaterialTheme.typography.labelSmall,
-            color = Ink.accent,
-            modifier = Modifier
-                .clickable(onClick = onEnable)
-                .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
-        )
+private fun switchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Ink.onAccent,
+    checkedTrackColor = Ink.accent,
+    uncheckedThumbColor = Ink.muted,
+    uncheckedTrackColor = Ink.raised,
+    uncheckedBorderColor = Ink.line,
+)
+
+private fun taskState(record: RunRecord?, id: String, signed: Boolean): String {
+    if (record == null) return "—"
+    if (signed || record.taskStates[id] == "finish") return "已完成"
+    return when (record.taskStates[id]) {
+        "waiting" -> "待执行"
+        null -> "—"
+        else -> record.taskStates[id] ?: "—"
     }
 }
 
-@Composable
-private fun AppearanceCard(appearance: String, darkTheme: Boolean, onChange: (String) -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("外观", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Text(
-                if (darkTheme) "当前夜间" else "当前白天",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AppearanceOption("跟随系统", appearance == "auto", Modifier.weight(1f)) { onChange("auto") }
-            AppearanceOption("白天", appearance == "light", Modifier.weight(1f)) { onChange("light") }
-            AppearanceOption("夜间", appearance == "dark", Modifier.weight(1f)) { onChange("dark") }
-        }
-    }
+private fun deltaText(record: RunRecord?, value: Long?): String {
+    if (record == null || !record.executed || value == null) return "—"
+    return if (value >= 0) "+$value" else value.toString()
 }
 
-@Composable
-private fun AppearanceOption(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .height(40.dp)
-            .background(if (selected) Ink.accent else Ink.raised, RoundedCornerShape(10.dp))
-            .border(1.dp, if (selected) Ink.accent else Ink.line, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) Ink.onAccent else Ink.muted,
-        )
-    }
-}
-
-@Composable
-private fun PermissionsCard(
-    permissions: Permissions,
-    hideRecent: Boolean,
-    onToggleHide: (Boolean) -> Unit,
-    onFix: (String) -> Unit,
-    onAutostart: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.surface, RoundedCornerShape(18.dp))
-            .border(1.dp, Ink.line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Text("值守条件", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-        Spacer(Modifier.height(4.dp))
-        PermissionRow("通知权限", permissions.notify, "开启", onClick = { onFix("notify") })
-        PermissionRow("忽略电池优化", permissions.battery, "去设置", onClick = { onFix("battery") })
-        PermissionRow("精确闹钟", permissions.exactAlarm, "去设置", onClick = { onFix("alarm") })
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("!", style = NumberSmall, color = Ink.muted)
-                Column {
-                    Text("自启动 / 后台运行", style = MaterialTheme.typography.bodyMedium, color = Ink.muted)
-                    Text(
-                        "系统读不到这个开关，只能自己去确认",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Ink.muted,
-                        fontSize = 11.sp,
-                    )
-                }
-            }
-            Text(
-                "去设置",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.accent,
-                modifier = Modifier.clickable(onClick = onAutostart),
-            )
-        }
-        HorizontalDivider(color = Ink.line, thickness = 1.dp)
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "最近任务隐藏",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (hideRecent) Ink.ink else Ink.muted,
-                )
-                Text(
-                    "离开时结束任务，多任务里不留卡片",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ink.muted,
-                    fontSize = 11.sp,
-                )
-            }
-            Switch(
-                checked = hideRecent,
-                onCheckedChange = onToggleHide,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Ink.onAccent,
-                    checkedTrackColor = Ink.accent,
-                    uncheckedThumbColor = Ink.muted,
-                    uncheckedTrackColor = Ink.raised,
-                    uncheckedBorderColor = Ink.line,
-                ),
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "开启前先在最近任务里长按盒签卡片锁定：未锁定时卡片消失，系统可能连带回收进程，"
-                + "定时闹钟也会失效，只能重新打开 App 补排。",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-            fontSize = 11.sp,
-        )
-    }
-}
-
-@Composable
-private fun PermissionRow(name: String, ok: Boolean, action: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (ok) "✓" else "!", style = NumberSmall, color = if (ok) Ink.muted else Ink.accent)
-            Text(name, style = MaterialTheme.typography.bodyMedium, color = if (ok) Ink.ink else Ink.muted)
-        }
-        if (ok) {
-            Text("已就绪", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+private fun balanceText(record: RunRecord?): String {
+    if (record == null) return "余额 H 币 — · 电池 — · 经验 —"
+    return buildString {
+        append("余额 H 币 ${record.coin}")
+        append(" · 电池 ${record.battery?.toString() ?: "—"}")
+        val level = record.level
+        if (level != null) {
+            append(" · Lv $level ${record.exp}")
+            record.maxExp?.let { append("/$it") }
         } else {
-            Text(
-                action,
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.accent,
-                modifier = Modifier.clickable(onClick = onClick),
-            )
+            append(" · 经验 ${record.exp}")
         }
     }
 }
+
+/* -------------------------------------------------------------- 系统侧 */
 
 /** 历史为空时（旧版本只存了一份最近记录）退回用那一条补位，避免「最近七天」直接空着。 */
 private fun recentHistory(store: SessionStore): List<RunRecord> =

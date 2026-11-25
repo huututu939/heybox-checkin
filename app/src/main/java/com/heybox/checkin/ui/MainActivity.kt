@@ -28,6 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.heybox.checkin.core.DeviceInfo
+import com.heybox.checkin.core.HeyboxConfig
+import com.heybox.checkin.core.SessionInfo
+import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.HeyboxTheme
 import com.heybox.checkin.ui.theme.Ink
@@ -130,6 +134,46 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** 设计走查用的假数据：最近七天里 19/20/22/23 完成，21 没记录，24 跳过，25 今天完成。 */
+private fun previewRunHistory(): List<RunRecord> {
+    fun at(daysAgo: Int): Long = java.util.Calendar.getInstance().apply {
+        add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
+        set(java.util.Calendar.HOUR_OF_DAY, 9)
+        set(java.util.Calendar.MINUTE, 10)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    fun record(daysAgo: Int, executed: Boolean) = RunRecord(
+        at = at(daysAgo),
+        executed = executed,
+        expDelta = if (executed) 90 else null,
+        coinDelta = if (executed) 300 else 0,
+        batteryDelta = if (executed) 1 else null,
+        exp = 170,
+        coin = 766,
+        battery = 5,
+        level = 3,
+        maxExp = 200,
+        signed = true,
+        taskStates = mapOf(
+            "sign" to "finish",
+            "1" to "finish",
+            "19" to "finish",
+            "31" to "finish",
+        ),
+    )
+
+    return listOf(
+        record(6, true),
+        record(5, true),
+        record(3, true),
+        record(2, true),
+        record(1, false),
+        record(0, true),
+    )
+}
+
 @Composable
 private fun App(
     store: SessionStore,
@@ -162,6 +206,19 @@ private fun App(
         debuggable && activity?.intent?.getBooleanExtra("preview_welcome", false) == true
     }
     var noticeAccepted by remember { mutableStateOf(store.acceptedNotice() >= NOTICE_VERSION) }
+    // 设计走查用：debug 包带 `--ez preview_home true` 直接看首页，不写会话、不需要登录。
+    val previewHome = remember {
+        val activity = context as? ComponentActivity
+        val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        debuggable && activity?.intent?.getBooleanExtra("preview_home", false) == true
+    }
+    val previewConfig = remember {
+        HeyboxConfig(
+            session = SessionInfo(heyboxId = "100000000", pkey = "", deviceId = ""),
+            device = DeviceInfo(model = "JER-AN10", osVersion = "12"),
+        )
+    }
+    val previewHistory = remember { previewRunHistory() }
 
     Box(
         modifier = Modifier
@@ -169,14 +226,14 @@ private fun App(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        if (previewWelcome || (!noticeAccepted && !previewLogin && !previewCode && !previewExpired)) {
+        if (previewWelcome || (!noticeAccepted && !previewHome && !previewLogin && !previewCode && !previewExpired)) {
             WelcomeScreen(
                 onAccept = {
                     if (!previewWelcome) store.acceptNotice(NOTICE_VERSION)
                     noticeAccepted = true
                 },
             )
-        } else if (config == null || previewLogin) {
+        } else if ((config == null && !previewHome) || previewLogin) {
             LoginScreen(
                 context = context,
                 store = store,
@@ -187,7 +244,8 @@ private fun App(
             HomeScreen(
                 context = context,
                 store = store,
-                config = config!!,
+                config = config ?: previewConfig,
+                previewHistory = if (previewHome) previewHistory else null,
                 appearance = appearance,
                 darkTheme = darkTheme,
                 resumeTick = resumeTick,
