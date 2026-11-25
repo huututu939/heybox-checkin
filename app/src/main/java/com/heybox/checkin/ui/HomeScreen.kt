@@ -107,7 +107,7 @@ private const val SHARE_POST = "1"
 private const val SHARE_GAME = "19"
 private const val SHARE_REVIEW = "31"
 private val SHARE_IDS = listOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW)
-private val TAB_BOTTOM = 196.dp
+private val TAB_BOTTOM = 132.dp
 
 /**
  * 首页拆成「今天 / 设置」两个页签：
@@ -271,8 +271,11 @@ fun HomeScreen(
                 enabledShares = enabledShares,
                 hideRecent = hideRecent,
                 error = error,
+                launching = launching,
+                stage = stage,
                 scroll = todayScroll,
                 onRelogin = onRelogin,
+                onRun = runNow,
                 onShowRecord = { showRecord = true },
                 onToggleShare = { id ->
                     val enabled = store.shareTaskEnabled(id)
@@ -334,13 +337,6 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
             backdrop = barBackdrop,
             tab = tab,
-            running = running,
-            stage = stage,
-            launching = launching,
-            showCta = tab == HomeTab.Today,
-            expired = expired,
-            onRun = runNow,
-            onRelogin = onRelogin,
             onTab = { tab = it },
         )
 
@@ -421,8 +417,11 @@ private fun TodayTab(
     enabledShares: Set<String>,
     hideRecent: Boolean,
     error: String?,
+    launching: Boolean,
+    stage: String,
     scroll: androidx.compose.foundation.ScrollState,
     onRelogin: () -> Unit,
+    onRun: () -> Unit,
     onShowRecord: () -> Unit,
     onToggleShare: (String) -> Unit,
 ) {
@@ -511,6 +510,43 @@ private fun TodayTab(
                 Box(Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Button(
+            // 登录过期时先修凭据：直接跑只会再失败一次。
+            onClick = if (expired) onRelogin else onRun,
+            enabled = !running && !launching,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Ink.ink,
+                contentColor = Ink.onInk,
+                disabledContainerColor = Ink.raised,
+                disabledContentColor = Ink.muted,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+        ) {
+            Text(
+                when {
+                    expired -> "重新登录"
+                    running -> stage.ifEmpty { "执行中" }
+                    else -> "立即执行一次"
+                },
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+            )
+        }
+        if (running) {
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                color = Ink.accent,
+                trackColor = Ink.line,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp),
+            )
         }
     }
 }
@@ -859,7 +895,7 @@ private fun SettingsTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
-            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 140.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 116.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1220,26 +1256,21 @@ private fun BottomBar(
     modifier: Modifier = Modifier,
     backdrop: LayerBackdrop,
     tab: HomeTab,
-    running: Boolean,
-    stage: String,
-    launching: Boolean,
-    showCta: Boolean,
-    expired: Boolean,
-    onRun: () -> Unit,
-    onRelogin: () -> Unit,
     onTab: (HomeTab) -> Unit,
 ) {
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp)
+            .navigationBarsPadding()
+            // 离屏幕底部和左右都留出距离，玻璃才是「浮」在上面的
+            .padding(horizontal = 54.dp, vertical = 14.dp)
             .drawBackdrop(
                 backdrop = backdrop,
-                shape = { RoundedCornerShape(30.dp) },
+                shape = { RoundedCornerShape(28.dp) },
                 effects = {
                     vibrancy()
-                    blur(26.dp.toPx())
-                    lens(28.dp.toPx(), 56.dp.toPx())
+                    blur(24.dp.toPx())
+                    lens(26.dp.toPx(), 52.dp.toPx())
                 },
                 highlight = { Highlight.Default },
                 shadow = { Shadow.Default },
@@ -1257,57 +1288,14 @@ private fun BottomBar(
                 Brush.linearGradient(
                     listOf(Glass.palette.borderTop, Glass.palette.borderBottom),
                 ),
-                RoundedCornerShape(30.dp),
+                RoundedCornerShape(28.dp),
             )
-            .navigationBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showCta) {
-            Button(
-                // 登录过期时先修凭据：直接跑只会再失败一次。
-                onClick = if (expired) onRelogin else onRun,
-                enabled = !running && !launching,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Ink.ink,
-                    contentColor = Ink.onInk,
-                    disabledContainerColor = Ink.raised,
-                    disabledContentColor = Ink.muted,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) {
-                Text(
-                    when {
-                        expired -> "重新登录"
-                        running -> stage.ifEmpty { "执行中" }
-                        else -> "立即执行一次"
-                    },
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                )
-            }
-            if (running) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    color = Ink.accent,
-                    trackColor = Ink.line,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp),
-                )
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = if (showCta) 10.dp else 0.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
-            TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
-        }
+        TabItem("今天", tab == HomeTab.Today, TabIcon.Today) { onTab(HomeTab.Today) }
+        TabItem("设置", tab == HomeTab.Settings, TabIcon.Settings) { onTab(HomeTab.Settings) }
     }
 }
 
