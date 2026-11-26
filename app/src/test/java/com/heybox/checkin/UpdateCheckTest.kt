@@ -60,6 +60,35 @@ class UpdateCheckTest {
     }
 
     @Test
+    fun `解析附件大小和 sha256 直链`() {
+        val info = UpdateCheck.parse(
+            """{"tag_name":"v1.5.2","assets":[{"name":"app-release.apk","size":8788078,"browser_download_url":"https://example.com/a.apk"},{"name":"app-release.apk.sha256","size":82,"browser_download_url":"https://example.com/a.sha256"}]}"""
+        )
+        assertEquals(8788078L, info.apkSize)
+        assertEquals("https://example.com/a.sha256", info.shaUrl)
+    }
+
+    @Test
+    fun `发版说明只留前几行正文`() {
+        val notes = UpdateCheck.summarizeNotes(
+            """## 盒签 v1.5.2
+
+### 新增
+
+- **打开 App 自动查一次**：有新版就弹窗
+- 应用内更新
+
+### 安装
+
+1. 下载 app-release.apk"""
+        )
+        assertTrue(notes!!.startsWith("打开 App 自动查一次"))
+        assertFalse(notes.contains("##"))
+        assertFalse(notes.contains("**"))
+        assertFalse(notes.contains("盒签 v1.5.2"))
+    }
+
+    @Test
     fun `没有 apk 附件时直链为空`() {
         val info = UpdateCheck.parse(
             """{"tag_name":"v1.5.1","assets":[{"name":"notes.txt","browser_download_url":"https://example.com/n.txt"}]}"""

@@ -26,6 +26,8 @@ data class RunRecord(
     val maxExp: Long?,
     val signed: Boolean,
     val taskStates: Map<String, String>,
+    /** 这次执行失败的原因。失败也会落到历史里，方便回看为什么没签上。 */
+    val error: String? = null,
 ) {
     companion object {
         fun from(snapshot: TaskSnapshot, signed: Boolean, report: RunReport? = null): RunRecord =
@@ -43,7 +45,35 @@ data class RunRecord(
                 signed = signed,
                 taskStates = snapshot.tasks.associate { it.id to it.state },
             )
+
+        /** 一次失败：没有可用的余额快照，余额由调用方用 [withBalanceOf] 补上。 */
+        fun failure(at: Long, message: String): RunRecord =
+            RunRecord(
+                at = at,
+                executed = true,
+                expDelta = null,
+                coinDelta = 0L,
+                batteryDelta = null,
+                exp = 0,
+                coin = 0,
+                battery = null,
+                level = null,
+                maxExp = null,
+                signed = false,
+                taskStates = emptyMap(),
+                error = message,
+            )
     }
+
+    /** 失败记录捎上当天已知的余额，否则首页会显示成一堆 0。 */
+    fun withBalanceOf(prev: RunRecord): RunRecord = copy(
+        exp = prev.exp,
+        coin = prev.coin,
+        battery = prev.battery,
+        level = prev.level,
+        maxExp = prev.maxExp,
+        taskStates = prev.taskStates,
+    )
 
     /** 同一天再执行一次时，把两次的增量加起来，余额与任务状态用最新的。 */
     fun withAnotherRun(later: RunRecord): RunRecord = later.copy(

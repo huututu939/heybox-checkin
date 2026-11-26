@@ -134,7 +134,7 @@ fun LoginScreen(
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "这台机器没有卡。点获取验证码后，用主手机收短信，再把 6 位数字填到第二步。",
+            "如果这台机器没插卡：点获取验证码后，用平时登录小黑盒的手机收短信，再把 6 位数字填到第二步。",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
         )

@@ -156,40 +156,48 @@ class MainActivity : ComponentActivity() {
 private fun previewRunHistory(): List<RunRecord> {
     fun at(daysAgo: Int): Long = java.util.Calendar.getInstance().apply {
         add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
-        set(java.util.Calendar.HOUR_OF_DAY, 9)
+        set(java.util.Calendar.HOUR_OF_DAY, 9 + daysAgo % 5)
         set(java.util.Calendar.MINUTE, 10)
         set(java.util.Calendar.SECOND, 0)
         set(java.util.Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    fun record(daysAgo: Int, executed: Boolean) = RunRecord(
+    fun done(daysAgo: Int) = RunRecord(
         at = at(daysAgo),
-        executed = executed,
-        expDelta = if (executed) 90 else null,
-        coinDelta = if (executed) 300 else 0,
-        batteryDelta = if (executed) 1 else null,
+        executed = true,
+        expDelta = 90,
+        coinDelta = 300,
+        batteryDelta = 1,
         exp = 170,
         coin = 766,
         battery = 5,
         level = 3,
         maxExp = 200,
         signed = true,
-        taskStates = mapOf(
-            "sign" to "finish",
-            "1" to "finish",
-            "19" to "finish",
-            "31" to "finish",
-        ),
+        taskStates = mapOf("sign" to "finish", "1" to "finish", "19" to "finish", "31" to "finish"),
     )
 
-    return listOf(
-        record(6, true),
-        record(5, true),
-        record(3, true),
-        record(2, true),
-        record(1, false),
-        record(0, true),
+    fun skipped(daysAgo: Int) = done(daysAgo).copy(
+        executed = false,
+        expDelta = null,
+        coinDelta = 0,
+        batteryDelta = null,
     )
+
+    fun failed(daysAgo: Int) = RunRecord.failure(
+        at = at(daysAgo),
+        message = if (daysAgo % 2 == 0) "HTTP 500" else "登录已过期",
+    ).withBalanceOf(done(daysAgo))
+
+    // 造 35 天的数据：绝大多数完成，偶尔跳过，两天失败，用来检查月分组和失败原因
+    return (34 downTo 0).map { daysAgo ->
+        when {
+            daysAgo == 0 -> done(0)
+            daysAgo == 9 || daysAgo == 23 -> failed(daysAgo)
+            daysAgo % 7 == 3 -> skipped(daysAgo)
+            else -> done(daysAgo)
+        }
+    }
 }
 
 @Composable

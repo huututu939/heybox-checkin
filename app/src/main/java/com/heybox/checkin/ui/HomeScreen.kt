@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.Canvas
@@ -43,6 +44,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -52,12 +54,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -94,12 +98,15 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.RunRecord
+import com.heybox.checkin.data.SettingsExport
+import com.heybox.checkin.data.SharedSettings
 import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.data.SessionStore
@@ -183,10 +190,12 @@ fun HomeScreen(
     var sawRunning by remember { mutableStateOf(false) }
     // 启动时自动查一次更新；失败就静默，别拿网络问题烦人
     var update by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showPermissionHelp by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (previewHistory == null) {
             UpdateCheck.latest().onSuccess { info ->
-                if (UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) update = info
+                val skipped = info.tag == store.skippedVersion()
+                if (!skipped && UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) update = info
             }
         }
     }
@@ -195,8 +204,19 @@ fun HomeScreen(
     val todayScroll = rememberScrollState()
     val settingsScroll = rememberScrollState()
 
+    // 首次进首页时，如果还有权限没开，提醒一次（之后不再打扰）
+    LaunchedEffect(Unit) {
+        if (previewHistory == null && !store.permissionHelpSeen() && permissions.readyCount < 3) {
+            showPermissionHelp = true
+        }
+    }
+
     update?.let { info ->
-        UpdateDialog(info = info, onDismiss = { update = null })
+        UpdateDialog(
+            info = info,
+            onDismiss = { update = null },
+            onSkip = { store.skipVersion(info.tag) },
+        )
     }
 
     if (showAbout) {
@@ -220,6 +240,7 @@ fun HomeScreen(
         error != null -> "未完成"
         ranToday && todayRecord?.signed == true && shareDone -> "今日已完成"
         ranToday && todayRecord?.signed == true -> "今日已签到"
+        ranToday && todayRecord?.error != null -> "今日失败"
         else -> "今日待执行"
     }
     val cells = weekCells(history, now)
@@ -380,6 +401,22 @@ fun HomeScreen(
                 onLogout = onLogout,
                 onExpiredRelogin = onRelogin,
                 onFixPermissions = { permissions = readPermissions(context) },
+                store = store,
+                onImport = { cfg ->
+                    SettingsExport.save(store, cfg)
+                    scheduled = cfg.scheduled
+                    startHour = cfg.startHour
+                    endHour = cfg.endHour
+                    enabledShares = store.enabledShares()
+                    hideRecent = cfg.hideFromRecents
+                    onAppearanceChange(cfg.appearance)
+                    nextAt = if (cfg.scheduled) {
+                        Scheduler.scheduleNext(context)
+                    } else {
+                        Scheduler.cancel(context)
+                        0L
+                    }
+                },
             )
         }
         }
@@ -392,7 +429,22 @@ fun HomeScreen(
             onTab = { tab = it },
         )
 
-        if (askHideRecent) {
+        if (showPermissionHelp) {
+        PermissionHelpDialog(
+            permissions = permissions,
+            onGoSettings = {
+                showPermissionHelp = false
+                store.markPermissionHelpSeen()
+                tab = HomeTab.Settings
+            },
+            onDismiss = {
+                showPermissionHelp = false
+                store.markPermissionHelpSeen()
+            },
+        )
+    }
+
+    if (askHideRecent) {
             GlassDialog(onDismissRequest = { askHideRecent = false }) {
                 DialogTitle("先在最近任务里锁定盒签")
                 Spacer(Modifier.height(10.dp))
@@ -595,7 +647,7 @@ private fun StatusRow(status: String, running: Boolean) {
     val color = when {
         running -> Ink.accent
         status == "今日已完成" || status == "今日已签到" -> Ink.success
-        status == "未完成" -> MaterialTheme.colorScheme.error
+        status == "未完成" || status == "今日失败" -> MaterialTheme.colorScheme.error
         else -> Ink.muted
     }
     val alpha = if (running) {
@@ -624,9 +676,17 @@ private fun StatusRow(status: String, running: Boolean) {
             status,
             style = MaterialTheme.typography.headlineMedium,
             color = Ink.ink,
+            modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.weight(1f))
-        Text(formatDay(System.currentTimeMillis()), style = MaterialTheme.typography.bodySmall, color = Ink.muted, fontSize = 12.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            formatDay(System.currentTimeMillis()),
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.muted,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -744,30 +804,36 @@ private fun SectionHead(title: String, hint: String, onHint: (() -> Unit)? = nul
 @Composable
 private fun TaskTiles(today: RunRecord?, enabledShares: Set<String>, onToggleShare: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SignTile(state = taskState(today, "sign", today?.signed == true), modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier.height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SignTile(state = taskState(today, "sign", today?.signed == true), modifier = Modifier.weight(1f).fillMaxHeight())
             ShareTile(
                 name = "分享帖子",
                 state = taskState(today, SHARE_POST, false),
                 enabled = SHARE_POST in enabledShares,
                 onToggle = { onToggleShare(SHARE_POST) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             ShareTile(
                 name = "分享游戏",
                 state = taskState(today, SHARE_GAME, false),
                 enabled = SHARE_GAME in enabledShares,
                 onToggle = { onToggleShare(SHARE_GAME) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             ShareTile(
                 name = "分享游戏评价",
                 state = taskState(today, SHARE_REVIEW, false),
                 enabled = SHARE_REVIEW in enabledShares,
                 onToggle = { onToggleShare(SHARE_REVIEW) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
     }
@@ -777,12 +843,20 @@ private fun TaskTiles(today: RunRecord?, enabledShares: Set<String>, onToggleSha
 private fun Tile(name: String, state: String, modifier: Modifier, trailing: @Composable () -> Unit) {
     Column(
         modifier = modifier
-            .height(86.dp)
+            // 用最小高度而不是固定高度：系统字体放大时卡片跟着长高，别把状态行裁掉
+            .heightIn(min = 86.dp)
             .glass(RoundedCornerShape(20.dp), raised = false)
             .padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(name, style = MaterialTheme.typography.titleMedium, color = Ink.ink, fontSize = 14.sp)
+        Text(
+            name,
+            style = MaterialTheme.typography.titleMedium,
+            color = Ink.ink,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -793,6 +867,7 @@ private fun Tile(name: String, state: String, modifier: Modifier, trailing: @Com
                 style = MaterialTheme.typography.bodySmall,
                 color = if (state == "已完成") Ink.success else Ink.muted,
                 fontSize = 11.5.sp,
+                maxLines = 1,
             )
             trailing()
         }
@@ -929,9 +1004,14 @@ private fun SettingsTab(
     onLogout: () -> Unit,
     onExpiredRelogin: () -> Unit,
     onFixPermissions: () -> Unit,
+    store: SessionStore,
+    onImport: (SharedSettings) -> Unit,
 ) {
+    val context = LocalContext.current
     // 退出会清掉登录态、历史和定时，先问一句，免得误触
     var askLogout by remember { mutableStateOf(false) }
+    var exportText by remember { mutableStateOf<String?>(null) }
+    var importOpen by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1115,6 +1195,12 @@ private fun SettingsTab(
         Card {
             ChevronRow("关于盒签", onClick = onAbout)
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            ChevronRow("导出配置", onClick = {
+                exportText = SettingsExport.encode(SettingsExport.read(store))
+            })
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            ChevronRow("导入配置", onClick = { importOpen = true })
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
             ChevronRow("退出登录", onClick = { askLogout = true })
             Spacer(Modifier.height(6.dp))
             Text(
@@ -1163,6 +1249,91 @@ private fun SettingsTab(
                 danger = true,
             )
         }
+    }
+
+    exportText?.let { text ->
+        GlassDialog(onDismissRequest = { exportText = null }) {
+            DialogTitle("导出配置")
+            Spacer(Modifier.height(8.dp))
+            DialogBody("复制这段文字，换台机器后在「导入配置」里粘贴。只含定时、分享开关这些偏好，不含账号和密钥。")
+            Spacer(Modifier.height(10.dp))
+            SelectionContainer {
+                Text(text, style = NumberTiny, color = Ink.ink, fontSize = 11.sp, lineHeight = 17.sp)
+            }
+            DialogActions(
+                primary = "复制",
+                onPrimary = {
+                    copyText(context, "盒签配置", text)
+                    exportText = null
+                },
+                secondary = "关闭",
+                onSecondary = { exportText = null },
+            )
+        }
+    }
+
+    if (importOpen) {
+        val decoded = remember { SettingsExport.decode(readClipText(context).orEmpty()) }
+        GlassDialog(onDismissRequest = { importOpen = false }) {
+            DialogTitle("导入配置")
+            Spacer(Modifier.height(8.dp))
+            if (decoded == null) {
+                DialogBody("剪贴板里没有盒签配置。先在旧机器的「导出配置」里复制一段，再回来。")
+                DialogActions(
+                    primary = "知道了",
+                    onPrimary = { importOpen = false },
+                    secondary = null,
+                )
+            } else {
+                DialogBody(
+                    "将导入：\n" +
+                        "每天自动签到 ${if (decoded.scheduled) "开启" else "关闭"}\n" +
+                        "执行时段 ${"%02d:00".format(decoded.startHour)} – ${"%02d:00".format(decoded.endHour)}\n" +
+                        "分享任务 ${decoded.shares.size} 项\n" +
+                        "最近任务隐藏 ${if (decoded.hideFromRecents) "开启" else "关闭"}\n" +
+                        "外观 ${when (decoded.appearance) { "light" -> "白天"; "dark" -> "夜间"; else -> "跟随系统" }}",
+                )
+                DialogActions(
+                    primary = "导入",
+                    onPrimary = {
+                        onImport(decoded)
+                        importOpen = false
+                    },
+                    secondary = "取消",
+                    onSecondary = { importOpen = false },
+                )
+            }
+        }
+    }
+}
+
+/** 首次进首页时的权限提醒：缺哪项、为什么缺了会出问题。 */
+@Composable
+private fun PermissionHelpDialog(
+    permissions: Permissions,
+    onGoSettings: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val missing = buildList {
+        if (!permissions.notify) add("通知权限：签到结果发不出通知")
+        if (!permissions.battery) add("忽略电池优化：后台容易被系统清掉")
+        if (!permissions.exactAlarm) add("精确闹钟：定时会漂到不准的点")
+    }
+    // 用户在设置里补齐后（回到 App 会重新读权限），这个提示自己消失
+    if (missing.isEmpty()) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
+    GlassDialog(onDismissRequest = onDismiss) {
+        DialogTitle("还有 ${missing.size} 项没开")
+        Spacer(Modifier.height(10.dp))
+        DialogBody(
+            "缺这些的话，夜里定时容易被系统掐掉，签到会漏。\n\n" +
+                missing.joinToString("\n") { "· $it" },
+        )
+        Spacer(Modifier.height(8.dp))
+        DialogBody("自启动要按机型手动开，设置页里有各家入口。")
+        DialogActions(primary = "去设置", onPrimary = onGoSettings, secondary = "稍后", onSecondary = onDismiss)
     }
 }
 
@@ -1313,9 +1484,22 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler { onBack() }
-    val cells = weekCells(history, System.currentTimeMillis()).reversed()
-    val done = cells.count { it.state == DayState.DONE }
-    val skipped = cells.count { it.state == DayState.SKIPPED }
+    val now = System.currentTimeMillis()
+    // 记录页看全量（最近 30 天），首页那排还是只看七天
+    val cells = weekCells(history, now, days = SessionStore.HISTORY_DAYS).reversed()
+    val doneAll = cells.count { it.state == DayState.DONE }
+    val skippedAll = cells.count { it.state == DayState.SKIPPED }
+    val failedAll = cells.count { it.state == DayState.FAILED }
+
+    // 按月分组（新的在前）：每组一张卡 + 一个月份小结
+    val groups = ArrayList<Pair<String, MutableList<WeekCell>>>()
+    for (cell in cells) {
+        if (groups.isEmpty() || groups.last().first != cell.monthLabel) {
+            groups += cell.monthLabel to mutableListOf(cell)
+        } else {
+            groups.last().second += cell
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1335,21 +1519,35 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         Text("记录", style = MaterialTheme.typography.displayLarge, color = Ink.ink)
         Spacer(Modifier.height(8.dp))
         Text(
-            "最近七天 · 完成 $done 天" + if (skipped > 0) "，跳过 $skipped 天" else "",
+            buildString {
+                append("最近 ${SessionStore.HISTORY_DAYS} 天 · 完成 $doneAll 天")
+                if (skippedAll > 0) append("，跳过 $skippedAll 天")
+                if (failedAll > 0) append("，失败 $failedAll 天")
+            },
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
-            fontSize = 13.sp,
         )
-        Spacer(Modifier.height(16.dp))
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .glass(RoundedCornerShape(24.dp))
-                .padding(horizontal = 18.dp, vertical = 2.dp),
-        ) {
-            cells.forEachIndexed { index, cell ->
-                if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
-                RecordRow(cell)
+
+        groups.forEach { (label, list) ->
+            val done = list.count { it.state == DayState.DONE }
+            val failed = list.count { it.state == DayState.FAILED }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "$label · 完成 $done 天" + if (failed > 0) " · 失败 $failed 天" else "",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ink.muted,
+                modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glass(RoundedCornerShape(24.dp))
+                    .padding(horizontal = 18.dp, vertical = 2.dp),
+            ) {
+                list.forEachIndexed { index, cell ->
+                    if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
+                    RecordRow(cell)
+                }
             }
         }
         Spacer(Modifier.height(40.dp))
@@ -1391,12 +1589,13 @@ private fun RecordRow(cell: WeekCell) {
             Text(
                 when {
                     cell.state == DayState.SKIPPED -> "检测到当日已签到，没有重复执行"
-                    cell.state == DayState.FAILED -> "检查当天日志或重新执行一次"
+                    // 失败原因存在记录里，直接展示比「去看日志」有用
+                    cell.state == DayState.FAILED -> cell.error?.let { "失败原因：$it" } ?: "没有留下失败原因"
                     cell.executed && cell.time != null -> "${cell.time} 执行"
                     else -> "当天没有记录"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
+                color = if (cell.state == DayState.FAILED) Ink.error else Ink.muted,
                 fontSize = 11.sp,
                 letterSpacing = 0.sp,
             )

@@ -56,6 +56,17 @@ class CheckInService : Service() {
     private fun mergeRun(store: SessionStore, fresh: RunRecord): RunRecord =
         todayRun(store)?.withAnotherRun(fresh) ?: fresh
 
+    /**
+     * 失败也记一笔，记录页才能说清哪天为什么没签上。
+     * 今天已经成功过就不再写入：别把一次手动重试的失败盖在成功记录上。
+     */
+    private fun recordFailure(store: SessionStore, message: String) {
+        val today = todayRun(store)
+        if (today?.signed == true) return
+        val failure = RunRecord.failure(System.currentTimeMillis(), message)
+        store.saveRun(today?.let { failure.withBalanceOf(it) } ?: failure)
+    }
+
     /** 本次只是发现「今天已完成」：余额按最新刷新，增量沿用今天已记录的那次。 */
     private fun mergeBalance(store: SessionStore, fresh: RunRecord): RunRecord =
         todayRun(store)?.withBalanceOnly(fresh) ?: fresh
@@ -128,10 +139,12 @@ class CheckInService : Service() {
         } catch (e: SessionExpiredException) {
             store.markSessionExpired()
             store.setLastResult("登录已过期：${e.message}")
+            recordFailure(store, "登录已过期")
             finish(store, false, "登录已过期，打开 App 重新登录", retry = false)
         } catch (e: Exception) {
             val message = e.message ?: e.javaClass.simpleName
             store.setLastResult("失败：$message")
+            recordFailure(store, message)
             // 手动点「立即重试」时不再自动重试，避免连点造成的循环。
             finish(store, false, message, retry = !force)
         }

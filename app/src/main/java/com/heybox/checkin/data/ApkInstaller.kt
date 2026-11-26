@@ -55,20 +55,69 @@ object ApkInstaller {
     suspend fun download(
         context: Context,
         apkUrl: String,
+        shaUrl: String? = null,
         onSource: (String) -> Unit,
         onProgress: (Float?) -> Unit,
     ): File {
+        val extra = UpdateSources.remoteMirrors()
+        val ranked = rank(UpdateSources.candidates(apkUrl, extra))
+        // 校验和先取：拿不到就不做这一道，签名校验仍然在
+        val expected = shaUrl?.let { url ->
+            runCatching { withContext(Dispatchers.IO) { fetchSha(url, extra) } }.getOrNull()
+        }
         var lastError: Throwable? = null
-        for (url in rank(UpdateSources.candidates(apkUrl))) {
+        for (url in ranked) {
             onSource(url)
             onProgress(0f)
             val result = runCatching {
-                withContext(Dispatchers.IO) { fetch(context, url, onProgress) }
+                withContext(Dispatchers.IO) {
+                    val file = fetch(context, url, onProgress)
+                    if (expected != null) require(file.sha256() == expected) { "校验和不一致" }
+                    file
+                }
             }
             result.getOrNull()?.let { return it }
             lastError = result.exceptionOrNull() ?: lastError
         }
         throw lastError ?: IllegalStateException("没有可用的下载线路")
+    }
+
+    /** Release 里那个 `.sha256` 小文件，走同样的线路，取第一条能拿到的。 */
+    private suspend fun fetchSha(shaUrl: String, extra: List<String>): String? {
+        for (url in rank(UpdateSources.candidates(shaUrl, extra))) {
+            val text = runCatching { readText(url) }.getOrNull() ?: continue
+            val token = text.trim().substringBefore(' ').lowercase()
+            if (token.length == 64 && token.all { it in "0123456789abcdef" }) return token
+        }
+        return null
+    }
+
+    private fun readText(url: String): String {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 6_000
+            readTimeout = 6_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", UA)
+        }
+        return try {
+            require(conn.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${conn.responseCode}" }
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun File.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private suspend fun rank(candidates: List<String>): List<String> = coroutineScope {

@@ -1,7 +1,11 @@
 package com.heybox.checkin.ui
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.ApkInstaller
 import com.heybox.checkin.data.UpdateInfo
@@ -38,12 +43,13 @@ private sealed interface UpdateStage {
 /**
  * 有新版时的弹窗：应用内直接下载安装，走不通再退回浏览器。
  *
- * 自动检查只在打开 App 时跑一次（见 HomeScreen），也复用在这里给「关于 → 检查更新」。
+ * [onSkip] 不为空时给一个「跳过这个版本」，调用方负责记住跳过的 tag。
  */
 @Composable
 internal fun UpdateDialog(
     info: UpdateInfo,
     onDismiss: () -> Unit,
+    onSkip: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -51,6 +57,7 @@ internal fun UpdateDialog(
     var progress by remember { mutableStateOf<Float?>(null) }
     // 当前走的线路（直连或某个镜像的域名），探测完才会有值
     var source by remember { mutableStateOf<String?>(null) }
+    val cellular = remember { onCellular(context) }
 
     fun install(file: File) {
         if (!ApkInstaller.canInstall(context)) {
@@ -79,6 +86,7 @@ internal fun UpdateDialog(
                 ApkInstaller.download(
                     context = context,
                     apkUrl = url,
+                    shaUrl = info.shaUrl,
                     onSource = { line -> scope.launch { source = UpdateSources.label(line) } },
                     onProgress = { p -> scope.launch { progress = p } },
                 )
@@ -94,11 +102,33 @@ internal fun UpdateDialog(
     GlassDialog(onDismissRequest = onDismiss) {
         DialogTitle("有新版 ${info.tag}")
         Spacer(Modifier.height(8.dp))
-        DialogBody("当前版本 ${BuildConfig.VERSION_NAME}")
+        DialogBody(
+            buildString {
+                append("当前版本 ${BuildConfig.VERSION_NAME}")
+                info.apkSize?.let { append("，更新包约 ${formatSize(it)}") }
+            },
+        )
+
+        info.notes?.let { notes ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                notes,
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.muted,
+                lineHeight = 18.sp,
+            )
+        }
+
         Spacer(Modifier.height(12.dp))
 
         when (val s = stage) {
-            UpdateStage.Ready -> DialogBody("可以直接在应用内下载安装，覆盖后登录态和历史都还在。")
+            UpdateStage.Ready -> {
+                DialogBody("可以直接在应用内下载安装，覆盖后登录态和历史都还在。")
+                if (cellular) {
+                    Spacer(Modifier.height(6.dp))
+                    DialogBody("现在用的是移动网络，建议连 WiFi 再下。", color = Ink.accent)
+                }
+            }
 
             UpdateStage.Downloading -> {
                 val p = progress
@@ -141,15 +171,33 @@ internal fun UpdateDialog(
         }
 
         Spacer(Modifier.height(10.dp))
-        Text(
-            "或者用浏览器下载 →",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.accent,
-            modifier = Modifier.clickable {
-                openUrl(context, info.url)
-                onDismiss()
-            },
-        )
+        Row {
+            Text(
+                "浏览器下载",
+                style = MaterialTheme.typography.bodySmall,
+                color = Ink.accent,
+                modifier = Modifier.clickable {
+                    openUrl(context, info.url)
+                    onDismiss()
+                },
+            )
+            if (onSkip != null) {
+                Text(
+                    " · ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.line,
+                )
+                Text(
+                    "跳过这个版本",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.muted,
+                    modifier = Modifier.clickable {
+                        onSkip()
+                        onDismiss()
+                    },
+                )
+            }
+        }
 
         val primary = when (stage) {
             UpdateStage.Ready -> "应用内更新"
@@ -173,4 +221,15 @@ internal fun UpdateDialog(
             primaryEnabled = stage != UpdateStage.Downloading,
         )
     }
+}
+
+private fun formatSize(bytes: Long): String =
+    if (bytes >= 1024 * 1024) "%.1f MB".format(bytes / 1024.0 / 1024.0) else "${bytes / 1024} KB"
+
+/** 移动网络下给个提醒：8 MB 对流量党不算小。 */
+private fun onCellular(context: Context): Boolean {
+    val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = manager.activeNetwork ?: return false
+    val caps = manager.getNetworkCapabilities(network) ?: return false
+    return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
 }

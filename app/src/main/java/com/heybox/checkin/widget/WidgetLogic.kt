@@ -42,15 +42,19 @@ internal fun describeWidget(
     val expDelta = record?.takeIf { it.has("exp_delta") }?.optLong("exp_delta")
     val coinDelta = record?.optLong("coin_delta", 0L) ?: 0L
     val tasks = record?.optJSONObject("tasks")
+    val error = record?.optString("error")?.takeIf { it.isNotEmpty() }
     // 只有开启的分享任务都结算了，才算「今日已完成」；全关时签到完就算完成。
     val shareDone = enabledShares.all { tasks?.optString(it) == "finish" }
 
     val badge = when {
         signed -> "已签到"
+        today && error != null -> "失败"
         today -> "待签到"
         else -> "未同步"
     }
     val delta = when {
+        // 失败原因直接上小组件：桌面扫一眼就知道是不是登录过期了
+        executed && !signed && error != null -> "签到失败：${error.take(14)}"
         executed && expDelta != null -> "+$expDelta 经验 · +$coinDelta H 币"
         executed -> "经验 — · +$coinDelta H 币"
         signed && shareDone -> "今日已完成"

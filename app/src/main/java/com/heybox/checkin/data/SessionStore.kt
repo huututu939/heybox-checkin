@@ -98,7 +98,7 @@ class SessionStore(context: Context) {
     private fun appendHistory(record: RunRecord) {
         val day = dayKey(record.at)
         val kept = history().filter { dayKey(it.at) != day }
-        val list = (listOf(record) + kept).take(8)
+        val list = (listOf(record) + kept).take(HISTORY_DAYS)
         val array = org.json.JSONArray()
         list.forEach { array.put(it.toJson()) }
         prefs.edit().putString(KEY_RUN_HISTORY, array.toString()).apply()
@@ -113,6 +113,7 @@ class SessionStore(context: Context) {
             // 增量未知时不要写成 0：0 会被界面当成「这次确实没加经验」。
             expDelta?.let { put("exp_delta", it) }
             put("coin_delta", coinDelta)
+            error?.let { put("error", it) }
             batteryDelta?.let { put("battery_delta", it) }
             put("exp", exp)
             put("coin", coin)
@@ -166,6 +167,16 @@ class SessionStore(context: Context) {
      * 默认关闭；开启前会提醒用户先在最近任务里锁定卡片（EMUI 等 ROM 的清后台行为）。
      */
     fun hideFromRecents(): Boolean = prefs.getBoolean(KEY_HIDE_RECENT, false)
+
+    /** 首次进入首页时的权限提醒只弹一次。 */
+    fun permissionHelpSeen(): Boolean = prefs.getBoolean(KEY_PERMISSION_HELP, false)
+
+    fun markPermissionHelpSeen() = prefs.edit().putBoolean(KEY_PERMISSION_HELP, true).apply()
+
+    /** 用户点过「跳过这个版本」的 tag；同一个版本不再自动弹窗。 */
+    fun skippedVersion(): String? = prefs.getString(KEY_SKIPPED_VERSION, null)
+
+    fun skipVersion(tag: String) = prefs.edit().putString(KEY_SKIPPED_VERSION, tag).apply()
 
     fun setHideFromRecents(enabled: Boolean) =
         prefs.edit().putBoolean(KEY_HIDE_RECENT, enabled).apply()
@@ -284,7 +295,13 @@ class SessionStore(context: Context) {
         private const val KEY_HIDE_RECENT = "hide_recent"
         private const val KEY_NOTICE_VERSION = "notice_version"
 
+        private const val KEY_SKIPPED_VERSION = "skipped_version"
+        private const val KEY_PERMISSION_HELP = "permission_help_seen"
+
         const val MAX_RETRIES = 2
+
+        /** 历史保留天数。一天一条 JSON，30 天也就几十 KB。 */
+        const val HISTORY_DAYS = 30
         const val DEFAULT_START_HOUR = 8
         const val DEFAULT_END_HOUR = 20
 

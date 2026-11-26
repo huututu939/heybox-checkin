@@ -50,3 +50,17 @@ internal fun isSameLocalDay(a: Long, b: Long): Boolean {
  */
 internal fun RunRecord?.todayOrNull(now: Long): RunRecord? =
     this?.takeIf { isSameLocalDay(it.at, now) }
+
+internal fun copyText(context: android.content.Context, label: String, text: String) {
+    val manager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as android.content.ClipboardManager
+    manager.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
+}
+
+internal fun readClipText(context: android.content.Context): String? {
+    val manager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as android.content.ClipboardManager
+    val clip = manager.primaryClip ?: return null
+    if (clip.itemCount == 0) return null
+    return clip.getItemAt(0).coerceToText(context)?.toString()?.takeIf { it.isNotBlank() }
+}

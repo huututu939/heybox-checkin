@@ -11,6 +11,8 @@ enum class DayState { DONE, SKIPPED, FAILED, NONE }
 
 data class WeekCell(
     val monthDay: String,
+    /** 比如「11月」，记录页按月分组用。 */
+    val monthLabel: String,
     val weekday: String,
     val state: DayState,
     val today: Boolean,
@@ -19,6 +21,8 @@ data class WeekCell(
     val expDelta: Long?,
     val coinDelta: Long,
     val batteryDelta: Long?,
+    /** 失败时的原因，只有 FAILED 那格会有。 */
+    val error: String? = null,
 )
 
 /**
@@ -34,6 +38,7 @@ internal fun weekCells(history: List<RunRecord>, now: Long, days: Int = 7): List
         val record = history.firstOrNull { isSameLocalDay(it.at, millis) }
         cells += WeekCell(
             monthDay = formatMonthDay(millis),
+            monthLabel = formatMonth(millis),
             weekday = weekdayShort(millis),
             state = when {
                 record == null -> DayState.NONE
@@ -47,10 +52,14 @@ internal fun weekCells(history: List<RunRecord>, now: Long, days: Int = 7): List
             expDelta = record?.expDelta,
             coinDelta = record?.coinDelta ?: 0,
             batteryDelta = record?.batteryDelta,
+            error = record?.error,
         )
     }
     return cells
 }
+
+private fun formatMonth(millis: Long): String =
+    SimpleDateFormat("M月", Locale.CHINA).format(Date(millis))
 
 private fun weekdayShort(millis: Long): String =
     SimpleDateFormat("E", Locale.CHINA).format(Date(millis)).removePrefix("周")

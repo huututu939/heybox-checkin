@@ -92,4 +92,17 @@ class WidgetLogicTest {
         assertEquals("定时已开启 · 尚未排定", data.next)
         assertEquals("未同步 · 尚未排定", data.line)
     }
+
+    @Test
+    fun `失败时小组件显示原因`() {
+        val now = System.currentTimeMillis()
+        val raw = JSONObject()
+            .put("at", now)
+            .put("executed", true)
+            .put("signed", false)
+            .put("error", "登录已过期")
+        val data = describeWidget(raw, scheduled = true, nextAt = now + 3600_000, now = now, loginRequired = false)
+        assertEquals("失败", data.badge)
+        assertTrue(data.delta.contains("登录已过期"))
+    }
 }

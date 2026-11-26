@@ -7,9 +7,19 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 远端最新版本信息。[url] 是 Release 页面，[apkUrl] 是 APK 直链（有的话就能应用内更新）。
+ * 远端最新版本信息。
+ *
+ * [url] 是 Release 页面；[apkUrl]/[apkSize]/[shaUrl] 来自 Release 附件，
+ * 有直链才能应用内更新；[notes] 是发版说明前几行，弹窗里给用户看一眼改了什么。
  */
-data class UpdateInfo(val tag: String, val url: String, val apkUrl: String? = null)
+data class UpdateInfo(
+    val tag: String,
+    val url: String,
+    val apkUrl: String? = null,
+    val apkSize: Long? = null,
+    val shaUrl: String? = null,
+    val notes: String? = null,
+)
 
 /**
  * 版本自检：每次打开 App 查一次，外加「关于 → 检查更新」手动查；不后台轮询。
@@ -51,15 +61,24 @@ object UpdateCheck {
         val tag = json.optString("tag_name").trim()
         require(tag.isNotEmpty()) { "响应里没有 tag_name" }
         val url = json.optString("html_url").trim().ifEmpty { RELEASES_URL }
-        val apkUrl = json.optJSONArray("assets")?.let { assets ->
-            (0 until assets.length())
-                .mapNotNull { assets.optJSONObject(it) }
-                .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
-                ?.optString("browser_download_url")
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-        }
-        return UpdateInfo(tag, url, apkUrl)
+        val assets = json.optJSONArray("assets")
+            ?.let { array -> (0 until array.length()).mapNotNull { array.optJSONObject(it) } }
+            .orEmpty()
+        fun assetUrl(predicate: (String) -> Boolean): String? = assets
+            .firstOrNull { predicate(it.optString("name")) }
+            ?.optString("browser_download_url")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+        val apk = assets.firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
+        return UpdateInfo(
+            tag = tag,
+            url = url,
+            apkUrl = apk?.optString("browser_download_url")?.trim()?.takeIf { it.isNotEmpty() },
+            apkSize = apk?.optLong("size")?.takeIf { it > 0L },
+            shaUrl = assetUrl { it.endsWith(".apk.sha256", ignoreCase = true) },
+            notes = json.optString("body").let(::summarizeNotes),
+        )
     }
 
     /** [latest] 是否比 [current] 新。两边的 `v` 前缀、缺省段、`-beta` 后缀都能处理。 */
@@ -73,6 +92,34 @@ object UpdateCheck {
             if (diff != 0) return diff
         }
         return 0
+    }
+
+    /**
+     * 发版说明只留前几行正文：弹窗里放不下整篇，标题符号和空行都去掉。
+     */
+    internal fun summarizeNotes(body: String, maxChars: Int = 160): String? {
+        // 只要第一段正文：标题（## 盒签 vX）和「新增 / 安装」这些小标题对用户没信息量，
+        // 弹窗里塞五行反而没人看
+        val paragraphs = body.replace("\r\n", "\n")
+            .split(Regex("\n\\s*\n"))
+            .map { paragraph ->
+                val header = paragraph.trimStart().startsWith("#")
+                val text = paragraph.lineSequence()
+                    .map { line ->
+                        line.trim().trimStart('#').trim()
+                            .removePrefix("- ").removePrefix("* ").trim()
+                    }
+                    .filter { it.isNotEmpty() }
+                    .joinToString(" ")
+                    .replace("**", "")
+                    .replace("`", "")
+                header to text
+            }
+            .filter { (header, text) -> !header && text.isNotBlank() }
+            .map { it.second }
+
+        val first = paragraphs.firstOrNull() ?: return null
+        return first.take(maxChars).trim().ifEmpty { null }
     }
 
     private fun segments(v: String): List<Int> =
