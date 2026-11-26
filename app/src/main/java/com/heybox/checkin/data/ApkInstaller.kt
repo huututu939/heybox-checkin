@@ -29,6 +29,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 object ApkInstaller {
 
     private const val MIME = "application/vnd.android.package-archive"
+    private const val APK_NAME = "heybox-update.apk"
     private const val UA = "heybox-checkin"
 
     /** 8.0 起「安装未知应用」是逐应用开关，没开的话连安装器都调不起来。 */
@@ -161,7 +162,7 @@ object ApkInstaller {
         onProgress: (Float?) -> Unit,
     ): File {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        val target = File(dir, "heybox-update.apk")
+        val target = File(dir, APK_NAME)
         target.delete()
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
@@ -200,6 +201,20 @@ object ApkInstaller {
     private fun File.looksLikeApk(): Boolean = inputStream().use { input ->
         val head = ByteArray(2)
         input.read(head) == 2 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()
+    }
+
+    /**
+     * 之前已经下好的包（比如权限没给、App 被系统重建过），版本对得上就直接复用，
+     * 不用再下一遍 8 MB。
+     */
+    fun cachedApk(context: Context, tag: String): File? {
+        val file = File(File(context.cacheDir, "updates"), APK_NAME)
+        if (!file.exists() || file.length() < 1_000_000L) return null
+        val expected = tag.trim().removePrefix("v")
+        val version = runCatching {
+            context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.versionName
+        }.getOrNull() ?: return null
+        return file.takeIf { version == expected }
     }
 
     fun install(context: Context, file: File) {

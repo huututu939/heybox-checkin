@@ -13,6 +13,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,29 +32,37 @@ import com.heybox.checkin.ui.theme.Ink
 import java.io.File
 import kotlinx.coroutines.launch
 
-/** 更新弹窗的状态机：下载、等待授权、失败都各有各的按钮。 */
+/** 更新弹窗的状态机：下载、等授权、失败各有各的按钮。 */
 private sealed interface UpdateStage {
     data object Ready : UpdateStage
     data object Downloading : UpdateStage
     data class Downloaded(val file: File) : UpdateStage
-    data class NeedPermission(val file: File) : UpdateStage
+
+    /** 缺「安装未知应用」权限；[file] 为空说明还没下载（先要权限再下，别白下 8 MB）。 */
+    data class NeedPermission(val file: File?) : UpdateStage
     data class Failed(val reason: String) : UpdateStage
 }
 
 /**
  * 有新版时的弹窗：应用内直接下载安装，走不通再退回浏览器。
  *
- * [onSkip] 不为空时给一个「跳过这个版本」，调用方负责记住跳过的 tag。
+ * [onSkip] 不为空时给一个「跳过这个版本」；[resumeTick] 是宿主页面的 resume 计数——
+ * 用户去系统设置给完权限回到 App 时靠它继续，不用再点一次、更不会重复下载。
  */
 @Composable
 internal fun UpdateDialog(
     info: UpdateInfo,
     onDismiss: () -> Unit,
     onSkip: (() -> Unit)? = null,
+    resumeTick: Int = 0,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var stage by remember { mutableStateOf<UpdateStage>(UpdateStage.Ready) }
+    // 之前下过同一个版本就直接当成已下载：系统重建过 App 也不用重下
+    val cached = remember(info.tag) { ApkInstaller.cachedApk(context, info.tag) }
+    var stage by remember(info.tag) {
+        mutableStateOf<UpdateStage>(cached?.let { UpdateStage.Downloaded(it) } ?: UpdateStage.Ready)
+    }
     var progress by remember { mutableStateOf<Float?>(null) }
     // 当前走的线路（直连或某个镜像的域名），探测完才会有值
     var source by remember { mutableStateOf<String?>(null) }
@@ -97,6 +106,30 @@ internal fun UpdateDialog(
                 }
                 .onFailure { stage = UpdateStage.Failed(describe(it)) }
         }
+    }
+
+    /** 点「应用内更新」：先确认能装，再决定要不要下载。 */
+    fun start() {
+        if (!ApkInstaller.canInstall(context)) {
+            stage = UpdateStage.NeedPermission(null)
+            ApkInstaller.requestPermission(context)
+            return
+        }
+        val ready = ApkInstaller.cachedApk(context, info.tag)
+        if (ready != null) {
+            stage = UpdateStage.Downloaded(ready)
+            install(ready)
+            return
+        }
+        download()
+    }
+
+    // 从「安装未知应用」设置回来：权限有了就接着装/下，不再让用户多点一次
+    LaunchedEffect(resumeTick, stage) {
+        val waiting = stage as? UpdateStage.NeedPermission ?: return@LaunchedEffect
+        if (!ApkInstaller.canInstall(context)) return@LaunchedEffect
+        val file = waiting.file
+        if (file != null && file.exists()) install(file) else start()
     }
 
     GlassDialog(onDismissRequest = onDismiss) {
@@ -158,10 +191,14 @@ internal fun UpdateDialog(
                 }
             }
 
-            is UpdateStage.Downloaded -> DialogBody("已下载，点「安装」交给系统安装器。")
+            is UpdateStage.Downloaded -> DialogBody("已经下好了，点「安装」交给系统安装器。")
 
             is UpdateStage.NeedPermission -> DialogBody(
-                "已经下好了。系统需要你允许「盒签」安装应用：在设置里打开开关后回来点「继续安装」。",
+                if (s.file == null) {
+                    "系统需要你允许「盒签」安装应用。先打开开关，回到 App 会自动接着下载并安装。"
+                } else {
+                    "已经下好了。打开开关后回到 App 会自动弹出安装，不用重新下载。"
+                },
             )
 
             is UpdateStage.Failed -> DialogBody(
@@ -203,16 +240,16 @@ internal fun UpdateDialog(
             UpdateStage.Ready -> "应用内更新"
             UpdateStage.Downloading -> "下载中…"
             is UpdateStage.Downloaded -> "安装"
-            is UpdateStage.NeedPermission -> "继续安装"
+            is UpdateStage.NeedPermission -> "去允许安装"
             is UpdateStage.Failed -> "重试"
         }
         DialogActions(
             primary = primary,
             onPrimary = {
                 when (val s = stage) {
-                    UpdateStage.Ready, is UpdateStage.Failed -> download()
+                    UpdateStage.Ready, is UpdateStage.Failed -> start()
                     is UpdateStage.Downloaded -> install(s.file)
-                    is UpdateStage.NeedPermission -> install(s.file)
+                    is UpdateStage.NeedPermission -> ApkInstaller.requestPermission(context)
                     UpdateStage.Downloading -> Unit
                 }
             },

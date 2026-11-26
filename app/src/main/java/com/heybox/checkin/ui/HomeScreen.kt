@@ -216,11 +216,12 @@ fun HomeScreen(
             info = info,
             onDismiss = { update = null },
             onSkip = { store.skipVersion(info.tag) },
+            resumeTick = resumeTick,
         )
     }
 
     if (showAbout) {
-        AboutScreen(onBack = { showAbout = false })
+        AboutScreen(onBack = { showAbout = false }, resumeTick = resumeTick)
         return
     }
     if (showRecord) {

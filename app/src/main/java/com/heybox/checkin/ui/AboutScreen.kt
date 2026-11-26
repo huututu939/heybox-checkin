@@ -55,7 +55,7 @@ private const val URL_CORE = "https://github.com/XiaHouSheng/heybox-core"
  * 视觉与首页同一套色板，不引入新的组件风格。
  */
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, resumeTick: Int = 0) {
     var showLicenses by remember { mutableStateOf(false) }
     if (showLicenses) {
         LicensesScreen(onBack = { showLicenses = false })
@@ -110,7 +110,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = Ink.muted,
             )
             Spacer(Modifier.height(6.dp))
-            UpdateRow()
+            UpdateRow(resumeTick)
         }
 
         Spacer(Modifier.height(14.dp))
@@ -258,7 +258,7 @@ private sealed interface UpdateState {
  * 版本自检入口（手动）。启动时也会自动查一次，见 HomeScreen；不做后台轮询。
  */
 @Composable
-private fun UpdateRow() {
+private fun UpdateRow(resumeTick: Int) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
@@ -324,7 +324,7 @@ private fun UpdateRow() {
         }
 
         dialog?.let { info ->
-            UpdateDialog(info = info, onDismiss = { dialog = null })
+            UpdateDialog(info = info, onDismiss = { dialog = null }, resumeTick = resumeTick)
         }
     }
 }
