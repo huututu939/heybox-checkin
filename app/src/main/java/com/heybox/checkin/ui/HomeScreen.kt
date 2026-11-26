@@ -400,8 +400,6 @@ fun HomeScreen(
                 onAppearanceChange = onAppearanceChange,
                 onAbout = { showAbout = true },
                 onLogout = onLogout,
-                onExpiredRelogin = onRelogin,
-                onFixPermissions = { permissions = readPermissions(context) },
                 store = store,
                 onImport = { cfg ->
                     SettingsExport.save(store, cfg)
@@ -569,7 +567,7 @@ private fun TodayTab(
         )
 
         Spacer(Modifier.height(20.dp))
-        SectionHead(title = "每日四件", hint = if (today == null) "今天 · 尚未执行" else "今天")
+        SectionHead(title = "每日四件")
         Spacer(Modifier.height(10.dp))
         TaskTiles(
             today = today,
@@ -585,16 +583,6 @@ private fun TodayTab(
         )
         Spacer(Modifier.height(10.dp))
         WeekRow(cells)
-
-        if (hideRecent) {
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "最近任务隐藏已开启：离开 App 会结束任务，多任务里不留卡片。",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-                fontSize = 11.sp,
-            )
-        }
 
         error?.let {
             Spacer(Modifier.height(14.dp))
@@ -762,7 +750,6 @@ private fun WindowBlock(scheduled: Boolean, nextAt: Long, startHour: Int, endHou
     Spacer(Modifier.height(8.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(hourLabel(startHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
-        Text("随机窗口", style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
         Text(hourLabel(endHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
     }
 }
@@ -785,20 +772,22 @@ private fun trackFraction(nextAt: Long, scheduled: Boolean, startHour: Int, endH
 }
 
 @Composable
-private fun SectionHead(title: String, hint: String, onHint: (() -> Unit)? = null) {
+private fun SectionHead(title: String, hint: String? = null, onHint: (() -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
         Text(title, style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-        Text(
-            hint,
-            style = if (onHint != null) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
-            color = if (onHint != null) Ink.accent else Ink.muted,
-            fontSize = if (onHint != null) 12.sp else 11.sp,
-            modifier = if (onHint != null) Modifier.clickable(onClick = onHint) else Modifier,
-        )
+        if (hint != null) {
+            Text(
+                hint,
+                style = if (onHint != null) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
+                color = if (onHint != null) Ink.accent else Ink.muted,
+                fontSize = if (onHint != null) 12.sp else 11.sp,
+                modifier = if (onHint != null) Modifier.clickable(onClick = onHint) else Modifier,
+            )
+        }
     }
 }
 
@@ -1003,8 +992,6 @@ private fun SettingsTab(
     onAppearanceChange: (String) -> Unit,
     onAbout: () -> Unit,
     onLogout: () -> Unit,
-    onExpiredRelogin: () -> Unit,
-    onFixPermissions: () -> Unit,
     store: SessionStore,
     onImport: (SharedSettings) -> Unit,
 ) {
@@ -1020,19 +1007,7 @@ private fun SettingsTab(
             .verticalScroll(scroll)
             .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 150.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text("设置", style = MaterialTheme.typography.headlineMedium, color = Ink.ink)
-            Text(
-                "${permissions.readyCount}/3 权限就绪",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (permissions.readyCount == 3) Ink.muted else Ink.accent,
-                modifier = Modifier.clickable(onClick = onFixPermissions),
-            )
-        }
+        Text("设置", style = MaterialTheme.typography.headlineMedium, color = Ink.ink)
 
         GroupLabel("自动", first = true)
         Card {
@@ -1062,16 +1037,8 @@ private fun SettingsTab(
                 )
             }
             HorizontalDivider(color = Ink.line, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("执行时段", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-                Text(
-                    "${hourLabel(startHour)} → ${hourLabel(endHour)}",
-                    style = NumberSmall,
-                    color = Ink.ink,
-                    fontSize = 14.sp,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
+            Text("执行时段", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HourStepper(
                     label = "开始",
@@ -1090,57 +1057,14 @@ private fun SettingsTab(
                     onChange = { onWindow(startHour, it) },
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "每天在时段内随机挑一刻，不会固定在同一个时间；改完立即重排。",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-                fontSize = 11.sp,
-            )
         }
 
         GroupLabel("值守")
         Card {
-            Text("值守条件", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
-            Spacer(Modifier.height(4.dp))
-            PermissionRow("通知权限", permissions.notify, "开启", onClick = { onFix("notify") })
-            PermissionRow("忽略电池优化", permissions.battery, "去设置", onClick = { onFix("battery") })
-            PermissionRow("精确闹钟", permissions.exactAlarm, "去设置", onClick = { onFix("alarm") })
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 11.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        Modifier
-                            .padding(top = 7.dp)
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Ink.accent),
-                    )
-                    Column {
-                        Text("自启动 / 后台运行", style = MaterialTheme.typography.bodyMedium, color = Ink.ink)
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            "系统读不到这个开关，只能自己去确认",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Ink.muted,
-                            fontSize = 11.5.sp,
-                        )
-                    }
-                }
-                Text(
-                    "去设置",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ink.accent,
-                    modifier = Modifier
-                        .clickable(onClick = onAutostart)
-                        .padding(start = 12.dp, top = 2.dp),
-                )
-            }
+            PermissionRow("通知权限", permissions.notify, PermGlyph.Bell, onClick = { onFix("notify") })
+            PermissionRow("忽略电池优化", permissions.battery, PermGlyph.Battery, onClick = { onFix("battery") })
+            PermissionRow("精确闹钟", permissions.exactAlarm, PermGlyph.Alarm, onClick = { onFix("alarm") })
+            PermissionRow("自启动 / 后台运行", null, PermGlyph.Power, onClick = onAutostart)
         }
 
         Spacer(Modifier.height(10.dp))
@@ -1150,29 +1074,18 @@ private fun SettingsTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("最近任务隐藏", style = MaterialTheme.typography.titleMedium, color = Ink.ink)
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        "离开时结束任务，多任务里不留卡片",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Ink.muted,
-                        fontSize = 11.5.sp,
-                    )
-                }
+                Text(
+                    "最近任务隐藏",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Ink.ink,
+                    modifier = Modifier.weight(1f),
+                )
                 Switch(
                     checked = hideRecent,
                     onCheckedChange = onToggleHideRecent,
                     colors = switchColors(),
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "开启前先锁定卡片，否则卡片消失时系统可能连带回收进程，定时闹钟也会失效。",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-                fontSize = 11.sp,
-            )
         }
 
         GroupLabel("显示")
@@ -1194,45 +1107,22 @@ private fun SettingsTab(
 
         GroupLabel("其他")
         Card {
-            ChevronRow("关于盒签", onClick = onAbout)
+            ChevronRow("关于盒签", RowGlyph.Info, onClick = onAbout)
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
-            ChevronRow("导出配置", onClick = {
+            ChevronRow("导出配置", RowGlyph.Export, onClick = {
                 exportText = SettingsExport.encode(SettingsExport.read(store))
             })
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
-            ChevronRow("导入配置", onClick = { importOpen = true })
+            ChevronRow("导入配置", RowGlyph.Import, onClick = { importOpen = true })
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
-            ChevronRow("退出登录", onClick = { askLogout = true })
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "盒签 ${com.heybox.checkin.BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-                fontSize = 11.sp,
-            )
+            ChevronRow("退出登录", RowGlyph.Exit, onClick = { askLogout = true })
         }
 
         error?.let {
             Spacer(Modifier.height(12.dp))
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
-        if (permissions.readyCount < 3) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "有 ${3 - permissions.readyCount} 项权限未就绪，夜间可能被系统清掉。",
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.accent,
-                fontSize = 11.sp,
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "重登只在登录过期时使用",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-            fontSize = 11.sp,
-            modifier = Modifier.clickable(onClick = onExpiredRelogin),
-        )
+
     }
 
     if (askLogout) {
@@ -1360,39 +1250,157 @@ private fun Card(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
+/**
+ * 一行一个权限/开关：图标同时表达「是哪一项」和「当前状态」，
+ * 没就绪时整行可点，就绪了就不再挂一句「已就绪」。
+ */
 @Composable
-private fun PermissionRow(name: String, ok: Boolean, action: String, onClick: () -> Unit) {
+private fun PermissionRow(
+    name: String,
+    ok: Boolean?,
+    glyph: PermGlyph,
+    action: String = "去设置",
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = ok != true, onClick = onClick)
             .padding(vertical = 11.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(if (ok) Ink.success else Ink.accent),
-            )
-            Text(name, style = MaterialTheme.typography.bodyMedium, color = Ink.ink)
+        PermIcon(glyph, ok)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Ink.ink,
+            modifier = Modifier.weight(1f),
+        )
+        if (ok != true) {
+            Text(action, style = MaterialTheme.typography.bodySmall, color = Ink.accent)
         }
-        if (ok) {
-            Text("已就绪", style = MaterialTheme.typography.bodySmall, color = Ink.muted, fontSize = 12.sp)
-        } else {
-            Text(
-                action,
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.accent,
-                modifier = Modifier.clickable(onClick = onClick),
-            )
+    }
+}
+
+private enum class PermGlyph { Bell, Battery, Alarm, Power }
+
+private enum class RowGlyph { Info, Export, Import, Exit }
+
+@Composable
+private fun RowIcon(glyph: RowGlyph) {
+    val color = Ink.muted
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val w = size.width
+        val h = size.height
+        when (glyph) {
+            RowGlyph.Info -> {
+                drawCircle(color, radius = w * 0.34f, center = Offset(w * 0.5f, h * 0.5f), style = stroke)
+                drawCircle(color, radius = w * 0.045f, center = Offset(w * 0.5f, h * 0.36f))
+                drawLine(color, Offset(w * 0.5f, h * 0.48f), Offset(w * 0.5f, h * 0.66f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            RowGlyph.Export -> {
+                drawLine(color, Offset(w * 0.5f, h * 0.72f), Offset(w * 0.5f, h * 0.26f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.36f, h * 0.4f), Offset(w * 0.5f, h * 0.26f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.64f, h * 0.4f), Offset(w * 0.5f, h * 0.26f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.24f, h * 0.82f), Offset(w * 0.76f, h * 0.82f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            RowGlyph.Import -> {
+                drawLine(color, Offset(w * 0.5f, h * 0.26f), Offset(w * 0.5f, h * 0.72f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.36f, h * 0.58f), Offset(w * 0.5f, h * 0.72f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.64f, h * 0.58f), Offset(w * 0.5f, h * 0.72f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.24f, h * 0.86f), Offset(w * 0.76f, h * 0.86f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            RowGlyph.Exit -> {
+                // 门 + 向外的箭头，和「自启动」的电源符号区分开
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(w * 0.16f, h * 0.22f),
+                    size = Size(w * 0.36f, h * 0.56f),
+                    cornerRadius = CornerRadius(w * 0.06f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(w * 0.46f, h * 0.5f), Offset(w * 0.84f, h * 0.5f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.72f, h * 0.36f), Offset(w * 0.86f, h * 0.5f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.72f, h * 0.64f), Offset(w * 0.86f, h * 0.5f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
         }
     }
 }
 
 @Composable
-private fun ChevronRow(text: String, onClick: () -> Unit) {
+private fun PermIcon(glyph: PermGlyph, ok: Boolean?) {
+    val color = when (ok) {
+        true -> Ink.success
+        false -> Ink.accent
+        null -> Ink.muted
+    }
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val w = size.width
+        val h = size.height
+        when (glyph) {
+            PermGlyph.Bell -> {
+                val bell = Path().apply {
+                    moveTo(w * 0.2f, h * 0.68f)
+                    cubicTo(w * 0.3f, h * 0.6f, w * 0.3f, h * 0.5f, w * 0.3f, h * 0.4f)
+                    cubicTo(w * 0.3f, h * 0.2f, w * 0.7f, h * 0.2f, w * 0.7f, h * 0.4f)
+                    cubicTo(w * 0.7f, h * 0.5f, w * 0.7f, h * 0.6f, w * 0.8f, h * 0.68f)
+                    close()
+                }
+                drawPath(bell, color, style = stroke)
+                drawCircle(color, radius = w * 0.055f, center = Offset(w * 0.5f, h * 0.8f))
+            }
+
+            PermGlyph.Battery -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(w * 0.12f, h * 0.3f),
+                    size = Size(w * 0.66f, h * 0.4f),
+                    cornerRadius = CornerRadius(w * 0.09f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(w * 0.84f, h * 0.42f), Offset(w * 0.84f, h * 0.58f), 2.dp.toPx(), StrokeCap.Round)
+                val bolt = Path().apply {
+                    moveTo(w * 0.5f, h * 0.34f)
+                    lineTo(w * 0.4f, h * 0.5f)
+                    lineTo(w * 0.5f, h * 0.5f)
+                    lineTo(w * 0.44f, h * 0.66f)
+                }
+                drawPath(bolt, color, style = stroke)
+            }
+
+            PermGlyph.Alarm -> {
+                drawCircle(color, radius = w * 0.31f, center = Offset(w * 0.5f, h * 0.55f), style = stroke)
+                drawLine(color, Offset(w * 0.5f, h * 0.4f), Offset(w * 0.5f, h * 0.55f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.5f, h * 0.55f), Offset(w * 0.6f, h * 0.61f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.28f, h * 0.16f), Offset(w * 0.37f, h * 0.25f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.72f, h * 0.16f), Offset(w * 0.63f, h * 0.25f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            PermGlyph.Power -> {
+                drawArc(
+                    color = color,
+                    startAngle = -60f,
+                    sweepAngle = 300f,
+                    useCenter = false,
+                    topLeft = Offset(w * 0.18f, h * 0.24f),
+                    size = Size(w * 0.64f, h * 0.64f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(w * 0.5f, h * 0.12f), Offset(w * 0.5f, h * 0.46f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChevronRow(text: String, glyph: RowGlyph? = null, onClick: () -> Unit) {
     val muted = Ink.muted
     Row(
         modifier = Modifier
@@ -1402,7 +1410,13 @@ private fun ChevronRow(text: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium, color = Ink.ink)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (glyph != null) {
+                RowIcon(glyph)
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(text, style = MaterialTheme.typography.titleMedium, color = Ink.ink)
+        }
         Canvas(Modifier.size(8.dp, 13.dp)) {
             val path = Path().apply {
                 moveTo(size.width * 0.2f, size.height * 0.12f)
@@ -1520,11 +1534,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         Text("记录", style = MaterialTheme.typography.displayLarge, color = Ink.ink)
         Spacer(Modifier.height(8.dp))
         Text(
-            buildString {
-                append("最近 ${SessionStore.HISTORY_DAYS} 天 · 完成 $doneAll 天")
-                if (skippedAll > 0) append("，跳过 $skippedAll 天")
-                if (failedAll > 0) append("，失败 $failedAll 天")
-            },
+            "最近 ${SessionStore.HISTORY_DAYS} 天 · 完成 $doneAll 天",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
         )
@@ -1532,9 +1542,14 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         groups.forEach { (label, list) ->
             val done = list.count { it.state == DayState.DONE }
             val failed = list.count { it.state == DayState.FAILED }
+            val skipped = list.count { it.state == DayState.SKIPPED }
             Spacer(Modifier.height(18.dp))
             Text(
-                "$label · 完成 $done 天" + if (failed > 0) " · 失败 $failed 天" else "",
+                buildString {
+                    append("$label · 完成 $done")
+                    if (skipped > 0) append(" · 跳过 $skipped")
+                    if (failed > 0) append(" · 失败 $failed")
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = Ink.muted,
                 modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
@@ -1578,34 +1593,34 @@ private fun RecordRow(cell: WeekCell) {
             Text(
                 when (cell.state) {
                     DayState.DONE -> recordDeltaText(cell)
-                    DayState.SKIPPED -> "未执行（已由其它入口完成）"
-                    DayState.FAILED -> "执行了，但签到没成功"
-                    DayState.NONE -> "未执行"
+                    DayState.SKIPPED -> "其它入口已完成"
+                    DayState.FAILED -> "签到没成功"
+                    DayState.NONE -> "没有记录"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (cell.state == DayState.DONE) Ink.ink else Ink.muted,
                 fontSize = 12.5.sp,
             )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when {
-                    cell.state == DayState.SKIPPED -> "检测到当日已签到，没有重复执行"
-                    // 失败原因存在记录里，直接展示比「去看日志」有用
-                    cell.state == DayState.FAILED -> cell.error?.let { "失败原因：$it" } ?: "没有留下失败原因"
-                    cell.executed && cell.time != null -> "${cell.time} 执行"
-                    else -> "当天没有记录"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (cell.state == DayState.FAILED) Ink.error else Ink.muted,
-                fontSize = 11.sp,
-                letterSpacing = 0.sp,
-            )
+            // 第二行只在真有额外信息时出现：完成给时间，失败给原因
+            val detail = when {
+                cell.state == DayState.FAILED -> cell.error?.let { "原因：$it" } ?: "没有留下失败原因"
+                cell.state == DayState.DONE && cell.time != null -> cell.time
+                else -> null
+            }
+            if (detail != null) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (cell.state == DayState.FAILED) Ink.error else Ink.muted,
+                    fontSize = 11.sp,
+                    letterSpacing = 0.sp,
+                )
+            }
         }
-        Spacer(Modifier.width(12.dp))
-        when (cell.state) {
-            DayState.DONE -> MiniCheck(Ink.success)
-            DayState.FAILED -> Text("–", style = NumberTiny, color = Ink.error)
-            DayState.SKIPPED, DayState.NONE -> Text("–", style = NumberTiny, color = Ink.line)
+        if (cell.state == DayState.DONE) {
+            Spacer(Modifier.width(12.dp))
+            MiniCheck(Ink.success)
         }
     }
 }
