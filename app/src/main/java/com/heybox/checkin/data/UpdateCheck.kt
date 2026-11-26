@@ -118,31 +118,30 @@ object UpdateCheck {
     }
 
     /**
-     * 发版说明只留前几行正文：弹窗里放不下整篇，标题符号和空行都去掉。
+     * 发版说明取第一段正文的第一条，给弹窗当「这版有什么」的一行预览。
+     *
+     * 更新日志按 `新增 / 优化 / 修复` 分条写，一条一行，所以取第一条就是最想让人看到的那条；
+     * 把整段拼起来会在弹窗里堆成一面墙。完整清单去 Release 页面看。
      */
     internal fun summarizeNotes(body: String, maxChars: Int = 160): String? {
-        // 只要第一段正文：标题（## 盒签 vX）和「新增 / 安装」这些小标题对用户没信息量，
-        // 弹窗里塞五行反而没人看
-        val paragraphs = body.replace("\r\n", "\n")
+        val item = body.replace("\r\n", "\n")
             .split(Regex("\n\\s*\n"))
-            .map { paragraph ->
-                val header = paragraph.trimStart().startsWith("#")
-                val text = paragraph.lineSequence()
-                    .map { line ->
-                        line.trim().trimStart('#').trim()
-                            .removePrefix("- ").removePrefix("* ").trim()
-                    }
-                    .filter { it.isNotEmpty() }
-                    .joinToString(" ")
-                    .replace("**", "")
-                    .replace("`", "")
-                header to text
+            // 标题行（## 盒签 vX、### 新增）对用户没有信息量
+            .filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
+            .flatMap { paragraph -> paragraph.lineSequence() }
+            .map { line ->
+                line.trim().trimStart('#').trim()
+                    .removePrefix("- ").removePrefix("* ").trim()
             }
-            .filter { (header, text) -> !header && text.isNotBlank() }
-            .map { it.second }
+            .firstOrNull { it.isNotEmpty() }
+            ?.replace("**", "")
+            ?.replace("`", "")
+            ?: return null
 
-        val first = paragraphs.firstOrNull() ?: return null
-        return first.take(maxChars).trim().ifEmpty { null }
+        val cut = item.take(maxChars).trim()
+        if (cut.isEmpty()) return null
+        // 截断时补省略号，否则弹窗里像是排版坏了
+        return if (item.length > maxChars) "$cut…" else cut
     }
 
     private fun segments(v: String): List<Int> =

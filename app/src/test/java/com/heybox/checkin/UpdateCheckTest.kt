@@ -86,6 +86,39 @@ class UpdateCheckTest {
         assertFalse(notes.contains("##"))
         assertFalse(notes.contains("**"))
         assertFalse(notes.contains("盒签 v1.5.2"))
+        // 只取第一条，别把整段拼成一面墙
+        assertFalse(notes.contains("应用内更新"))
+    }
+
+    @Test
+    fun `分节日志只取第一条新增项`() {
+        val notes = UpdateCheck.summarizeNotes(
+            """## 盒签 v1.6.0
+
+### 新增
+
+- 失败原因分类：网络、服务、登录、验证、限流、核对六类
+- 连续漏签提醒：连续 2 天没签上时发通知
+
+### 修复
+
+- 首页按钮被底栏遮挡"""
+        )!!
+        assertEquals("失败原因分类：网络、服务、登录、验证、限流、核对六类", notes)
+    }
+
+    @Test
+    fun `太长时截断并补省略号`() {
+        val long = "- " + "这是一句很长的更新说明".repeat(20)
+        val notes = UpdateCheck.summarizeNotes(long, maxChars = 40)!!
+        assertEquals(41, notes.length)
+        assertTrue(notes.endsWith("…"))
+    }
+
+    @Test
+    fun `刚好不超长时不加省略号`() {
+        val notes = UpdateCheck.summarizeNotes("- 短说明", maxChars = 40)!!
+        assertEquals("短说明", notes)
     }
 
     @Test
