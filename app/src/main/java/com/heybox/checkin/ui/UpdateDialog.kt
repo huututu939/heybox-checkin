@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.ApkInstaller
 import com.heybox.checkin.data.UpdateInfo
+import com.heybox.checkin.data.UpdateSources
 import com.heybox.checkin.ui.theme.Ink
 import java.io.File
 import kotlinx.coroutines.launch
@@ -50,6 +51,8 @@ internal fun UpdateDialog(
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf<UpdateStage>(UpdateStage.Ready) }
     var progress by remember { mutableStateOf<Float?>(null) }
+    // 当前走的线路（直连或某个镜像的域名），探测完才会有值
+    var source by remember { mutableStateOf<String?>(null) }
 
     fun install(file: File) {
         if (!ApkInstaller.canInstall(context)) {
@@ -72,8 +75,16 @@ internal fun UpdateDialog(
         }
         stage = UpdateStage.Downloading
         progress = 0f
+        source = null
         scope.launch {
-            runCatching { ApkInstaller.download(context, url) { p -> scope.launch { progress = p } } }
+            runCatching {
+                ApkInstaller.download(
+                    context = context,
+                    apkUrl = url,
+                    onSource = { line -> scope.launch { source = UpdateSources.label(line) } },
+                    onProgress = { p -> scope.launch { progress = p } },
+                )
+            }
                 .onSuccess { file ->
                     stage = UpdateStage.Downloaded(file)
                     install(file)
@@ -104,8 +115,13 @@ internal fun UpdateDialog(
 
                     UpdateStage.Downloading -> {
                         val p = progress
+                        val line = source
                         Text(
-                            if (p != null) "正在下载 ${(p * 100).toInt()}%" else "正在下载…",
+                            when {
+                                line == null -> "正在选择最快线路…"
+                                p != null -> "正在从 $line 下载 ${(p * 100).toInt()}%"
+                                else -> "正在从 $line 下载…"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Spacer(Modifier.height(8.dp))
