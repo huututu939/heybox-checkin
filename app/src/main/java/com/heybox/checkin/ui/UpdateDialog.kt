@@ -1,15 +1,13 @@
 package com.heybox.checkin.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,112 +91,86 @@ internal fun UpdateDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Ink.surface,
-        titleContentColor = Ink.ink,
-        textContentColor = Ink.muted,
-        title = { Text("有新版 ${info.tag}", style = MaterialTheme.typography.titleMedium) },
-        text = {
-            Column {
-                Text(
-                    "当前版本 ${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ink.muted,
+    GlassDialog(onDismissRequest = onDismiss) {
+        DialogTitle("有新版 ${info.tag}")
+        Spacer(Modifier.height(8.dp))
+        DialogBody("当前版本 ${BuildConfig.VERSION_NAME}")
+        Spacer(Modifier.height(12.dp))
+
+        when (val s = stage) {
+            UpdateStage.Ready -> DialogBody("可以直接在应用内下载安装，覆盖后登录态和历史都还在。")
+
+            UpdateStage.Downloading -> {
+                val p = progress
+                val line = source
+                DialogBody(
+                    when {
+                        line == null -> "正在选择最快线路…"
+                        p != null -> "正在从 $line 下载 ${(p * 100).toInt()}%"
+                        else -> "正在从 $line 下载…"
+                    },
                 )
                 Spacer(Modifier.height(10.dp))
-                when (val s = stage) {
-                    UpdateStage.Ready -> Text(
-                        "可以直接在应用内下载安装，覆盖后登录态和历史都还在。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
-                    UpdateStage.Downloading -> {
-                        val p = progress
-                        val line = source
-                        Text(
-                            when {
-                                line == null -> "正在选择最快线路…"
-                                p != null -> "正在从 $line 下载 ${(p * 100).toInt()}%"
-                                else -> "正在从 $line 下载…"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        if (p != null) {
-                            LinearProgressIndicator(
-                                progress = { p },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = Ink.accent,
-                                trackColor = Ink.raised,
-                                strokeCap = StrokeCap.Round,
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = Ink.accent,
-                                trackColor = Ink.raised,
-                            )
-                        }
-                    }
-
-                    is UpdateStage.Downloaded -> Text(
-                        "已下载，点「安装」交给系统安装器。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
-                    is UpdateStage.NeedPermission -> Text(
-                        "已经下好了。系统需要你允许「盒签」安装应用：在设置里打开开关后回来点「继续安装」。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-
-                    is UpdateStage.Failed -> Text(
-                        "更新失败：${s.reason}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                TextButton(
-                    onClick = {
-                        openUrl(context, info.url)
-                        onDismiss()
-                    },
-                    contentPadding = PaddingValues(0.dp),
-                ) {
-                    Text(
-                        "或者用浏览器下载 →",
-                        style = MaterialTheme.typography.bodySmall,
+                if (p != null) {
+                    LinearProgressIndicator(
+                        progress = { p },
+                        modifier = Modifier.fillMaxWidth(),
                         color = Ink.accent,
+                        trackColor = Ink.raised,
+                        strokeCap = StrokeCap.Round,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Ink.accent,
+                        trackColor = Ink.raised,
                     )
                 }
             }
-        },
-        confirmButton = {
-            when (val s = stage) {
-                UpdateStage.Ready -> TextButton(onClick = { download() }) {
-                    Text("应用内更新", color = Ink.accent)
-                }
 
-                UpdateStage.Downloading -> TextButton(onClick = {}, enabled = false) {
-                    Text("下载中…")
-                }
+            is UpdateStage.Downloaded -> DialogBody("已下载，点「安装」交给系统安装器。")
 
-                is UpdateStage.Downloaded -> TextButton(onClick = { install(s.file) }) {
-                    Text("安装", color = Ink.accent)
-                }
+            is UpdateStage.NeedPermission -> DialogBody(
+                "已经下好了。系统需要你允许「盒签」安装应用：在设置里打开开关后回来点「继续安装」。",
+            )
 
-                is UpdateStage.NeedPermission -> TextButton(onClick = { install(s.file) }) {
-                    Text("继续安装", color = Ink.accent)
-                }
+            is UpdateStage.Failed -> DialogBody(
+                "更新失败：${s.reason}",
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
 
-                is UpdateStage.Failed -> TextButton(onClick = { download() }) {
-                    Text("重试", color = Ink.accent)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "或者用浏览器下载 →",
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.accent,
+            modifier = Modifier.clickable {
+                openUrl(context, info.url)
+                onDismiss()
+            },
+        )
+
+        val primary = when (stage) {
+            UpdateStage.Ready -> "应用内更新"
+            UpdateStage.Downloading -> "下载中…"
+            is UpdateStage.Downloaded -> "安装"
+            is UpdateStage.NeedPermission -> "继续安装"
+            is UpdateStage.Failed -> "重试"
+        }
+        DialogActions(
+            primary = primary,
+            onPrimary = {
+                when (val s = stage) {
+                    UpdateStage.Ready, is UpdateStage.Failed -> download()
+                    is UpdateStage.Downloaded -> install(s.file)
+                    is UpdateStage.NeedPermission -> install(s.file)
+                    UpdateStage.Downloading -> Unit
                 }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("稍后", color = Ink.muted) }
-        },
-    )
+            },
+            secondary = "稍后",
+            onSecondary = onDismiss,
+            primaryEnabled = stage != UpdateStage.Downloading,
+        )
+    }
 }

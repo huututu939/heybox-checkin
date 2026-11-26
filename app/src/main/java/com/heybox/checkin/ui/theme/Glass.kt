@@ -257,3 +257,36 @@ fun Modifier.glass(
             )
         }
 }
+
+/**
+ * 弹窗卡片。弹窗在独立窗口里，采不到页面后景，所以不做折射，
+ * 只保留和卡片一致的那几层：表面色相、描边、上沿高光。
+ */
+@Composable
+fun Modifier.dialogSurface(shape: Shape = RoundedCornerShape(26.dp)): Modifier {
+    val g = Glass.palette
+    return this
+        .shadow(24.dp, shape, clip = false, ambientColor = g.shadow, spotColor = g.shadow)
+        .clip(shape)
+        .background(
+            Brush.verticalGradient(
+                listOf(Ink.surface.copy(alpha = 0.96f), Ink.surface.copy(alpha = 0.92f)),
+            ),
+        )
+        .background(
+            Brush.linearGradient(
+                listOf(g.tintA.copy(alpha = 0.07f), Color.Transparent, g.tintB.copy(alpha = 0.07f)),
+            ),
+        )
+        .border(1.dp, Brush.verticalGradient(listOf(g.borderTop, g.borderBottom)), shape)
+        .drawWithContent {
+            drawContent()
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(g.highlight, Color.Transparent),
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width * 0.9f, size.height * 0.7f),
+                ),
+            )
+        }
+}

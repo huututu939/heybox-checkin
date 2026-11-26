@@ -61,7 +61,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -394,61 +393,48 @@ fun HomeScreen(
         )
 
         if (askHideRecent) {
-            AlertDialog(
-                onDismissRequest = { askHideRecent = false },
-                containerColor = Ink.surface,
-                titleContentColor = Ink.ink,
-                textContentColor = Ink.muted,
-                title = { Text("先在最近任务里锁定盒签", style = MaterialTheme.typography.titleMedium) },
-                text = {
-                    Text(
-                        "开启后，离开 App 时会结束任务，多任务里不再留下盒签卡片。\n\n" +
-                            "请先在最近任务里长按盒签卡片并锁定，再回来开启：没锁定时卡片直接消失，" +
-                            "系统可能顺手把进程一起回收，定时闹钟也会失效，只能重新打开 App 补排。\n\n" +
-                            "锁定后点下面的按钮。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
+            GlassDialog(onDismissRequest = { askHideRecent = false }) {
+                DialogTitle("先在最近任务里锁定盒签")
+                Spacer(Modifier.height(10.dp))
+                DialogBody(
+                    "开启后，离开 App 时会结束任务，多任务里不再留下盒签卡片。\n\n" +
+                        "请先在最近任务里长按盒签卡片并锁定，再回来开启：没锁定时卡片直接消失，" +
+                        "系统可能顺手把进程一起回收，定时闹钟也会失效，只能重新打开 App 补排。\n\n" +
+                        "锁定后点下面的按钮。",
+                )
+                DialogActions(
+                    primary = "已锁定，开启",
+                    onPrimary = {
                         store.setHideFromRecents(true)
                         hideRecent = true
                         askHideRecent = false
-                    }) { Text("已锁定，开启", color = Ink.accent) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { askHideRecent = false }) { Text("取消", color = Ink.muted) }
-                },
-            )
+                    },
+                    onSecondary = { askHideRecent = false },
+                )
+            }
         }
 
         if (startupHelp) {
-            AlertDialog(
-                onDismissRequest = { startupHelp = false },
-                containerColor = Ink.surface,
-                titleContentColor = Ink.ink,
-                textContentColor = Ink.muted,
-                title = { Text("把盒签加进自启动", style = MaterialTheme.typography.titleMedium) },
-                text = {
-                    Text(
-                        "各家系统的入口不一样，App 无权直接跳过去，按机型手动开一次即可：\n\n" +
-                            "华为：设置 → 应用 → 应用启动管理 → 盒签 → 关掉「自动管理」，勾选自启动、后台活动\n" +
-                            "小米：设置 → 应用设置 → 授权管理 → 自启动 → 盒签\n" +
-                            "OPPO / vivo：设置 → 应用管理 → 盒签 → 自启动 / 后台运行\n\n" +
-                            "另外在最近任务里把盒签卡片锁定，能少被系统清一次。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
+            GlassDialog(onDismissRequest = { startupHelp = false }) {
+                DialogTitle("把盒签加进自启动")
+                Spacer(Modifier.height(10.dp))
+                DialogBody(
+                    "各家系统的入口不一样，App 无权直接跳过去，按机型手动开一次即可：\n\n" +
+                        "华为：设置 → 应用 → 应用启动管理 → 盒签 → 关掉「自动管理」，勾选自启动、后台活动\n" +
+                        "小米：设置 → 应用设置 → 授权管理 → 自启动 → 盒签\n" +
+                        "OPPO / vivo：设置 → 应用管理 → 盒签 → 自启动 / 后台运行\n\n" +
+                        "另外在最近任务里把盒签卡片锁定，能少被系统清一次。",
+                )
+                DialogActions(
+                    primary = "打开系统设置",
+                    onPrimary = {
                         startupHelp = false
                         openStartupSettings(context)
-                    }) { Text("打开系统设置", color = Ink.accent) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { startupHelp = false }) { Text("知道了", color = Ink.muted) }
-                },
-            )
+                    },
+                    secondary = "知道了",
+                    onSecondary = { startupHelp = false },
+                )
+            }
         }
     }
 }
@@ -1163,28 +1149,20 @@ private fun SettingsTab(
     }
 
     if (askLogout) {
-        AlertDialog(
-            onDismissRequest = { askLogout = false },
-            containerColor = Ink.surface,
-            titleContentColor = Ink.ink,
-            textContentColor = Ink.muted,
-            title = { Text("退出登录？", style = MaterialTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    "会清掉登录态、签到历史和定时设置，自动签到也会停下；重新登录后要再设一次。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        GlassDialog(onDismissRequest = { askLogout = false }) {
+            DialogTitle("退出登录？")
+            Spacer(Modifier.height(10.dp))
+            DialogBody("会清掉登录态、签到历史和定时设置，自动签到也会停下；重新登录后要再设一次。")
+            DialogActions(
+                primary = "退出",
+                onPrimary = {
                     askLogout = false
                     onLogout()
-                }) { Text("退出", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { askLogout = false }) { Text("取消", color = Ink.muted) }
-            },
-        )
+                },
+                onSecondary = { askLogout = false },
+                danger = true,
+            )
+        }
     }
 }
 
