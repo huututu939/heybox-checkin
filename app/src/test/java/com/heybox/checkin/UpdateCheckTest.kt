@@ -52,6 +52,22 @@ class UpdateCheckTest {
     }
 
     @Test
+    fun `从 assets 里挑出 apk 直链`() {
+        val info = UpdateCheck.parse(
+            """{"tag_name":"v1.5.1","html_url":"https://github.com/huututu939/heybox-checkin/releases/tag/v1.5.1","assets":[{"name":"app-release.apk.sha256","browser_download_url":"https://example.com/a.sha256"},{"name":"app-release.apk","browser_download_url":"https://example.com/a.apk"}]}"""
+        )
+        assertEquals("https://example.com/a.apk", info.apkUrl)
+    }
+
+    @Test
+    fun `没有 apk 附件时直链为空`() {
+        val info = UpdateCheck.parse(
+            """{"tag_name":"v1.5.1","assets":[{"name":"notes.txt","browser_download_url":"https://example.com/n.txt"}]}"""
+        )
+        assertEquals(null, info.apkUrl)
+    }
+
+    @Test
     fun `缺少 html_url 时回落到 releases 页`() {
         val info = UpdateCheck.parse("""{"tag_name":"v1.5.0"}""")
         assertEquals(UpdateCheck.RELEASES_URL, info.url)

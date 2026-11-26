@@ -6,11 +6,13 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** 远端最新版本信息。 */
-data class UpdateInfo(val tag: String, val url: String)
+/**
+ * 远端最新版本信息。[url] 是 Release 页面，[apkUrl] 是 APK 直链（有的话就能应用内更新）。
+ */
+data class UpdateInfo(val tag: String, val url: String, val apkUrl: String? = null)
 
 /**
- * 版本自检：只在用户主动点「检查更新」时访问一次 GitHub Releases API，不做后台轮询。
+ * 版本自检：每次打开 App 查一次，外加「关于 → 检查更新」手动查；不后台轮询。
  *
  * 存在的理由：官方设备指纹 SDK 或 APP 版本一变，本程序就会在登录时主动失败，
  * 用户需要知道「不是账号的问题，是包太旧了」以及去哪里拿新包。
@@ -49,7 +51,15 @@ object UpdateCheck {
         val tag = json.optString("tag_name").trim()
         require(tag.isNotEmpty()) { "响应里没有 tag_name" }
         val url = json.optString("html_url").trim().ifEmpty { RELEASES_URL }
-        return UpdateInfo(tag, url)
+        val apkUrl = json.optJSONArray("assets")?.let { assets ->
+            (0 until assets.length())
+                .mapNotNull { assets.optJSONObject(it) }
+                .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
+                ?.optString("browser_download_url")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
+        return UpdateInfo(tag, url, apkUrl)
     }
 
     /** [latest] 是否比 [current] 新。两边的 `v` 前缀、缺省段、`-beta` 后缀都能处理。 */

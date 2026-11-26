@@ -99,7 +99,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.core.HeyboxConfig
+import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.RunRecord
+import com.heybox.checkin.data.UpdateCheck
+import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
@@ -179,10 +182,23 @@ fun HomeScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var launching by remember { mutableStateOf(false) }
     var sawRunning by remember { mutableStateOf(false) }
+    // 启动时自动查一次更新；失败就静默，别拿网络问题烦人
+    var update by remember { mutableStateOf<UpdateInfo?>(null) }
+    LaunchedEffect(Unit) {
+        if (previewHistory == null) {
+            UpdateCheck.latest().onSuccess { info ->
+                if (UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) update = info
+            }
+        }
+    }
     val running by RunState.running.collectAsState()
     val stage by RunState.stage.collectAsState()
     val todayScroll = rememberScrollState()
     val settingsScroll = rememberScrollState()
+
+    update?.let { info ->
+        UpdateDialog(info = info, onDismiss = { update = null })
+    }
 
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
@@ -928,6 +944,9 @@ private fun SettingsTab(
     onExpiredRelogin: () -> Unit,
     onFixPermissions: () -> Unit,
 ) {
+    // 退出会清掉登录态、历史和定时，先问一句，免得误触
+    var askLogout by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1110,7 +1129,7 @@ private fun SettingsTab(
         Card {
             ChevronRow("关于盒签", onClick = onAbout)
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
-            ChevronRow("退出登录", onClick = onLogout)
+            ChevronRow("退出登录", onClick = { askLogout = true })
             Spacer(Modifier.height(6.dp))
             Text(
                 "盒签 ${com.heybox.checkin.BuildConfig.VERSION_NAME}",
@@ -1140,6 +1159,31 @@ private fun SettingsTab(
             color = Ink.muted,
             fontSize = 11.sp,
             modifier = Modifier.clickable(onClick = onExpiredRelogin),
+        )
+    }
+
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            containerColor = Ink.surface,
+            titleContentColor = Ink.ink,
+            textContentColor = Ink.muted,
+            title = { Text("退出登录？", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "会清掉登录态、签到历史和定时设置，自动签到也会停下；重新登录后要再设一次。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askLogout = false
+                    onLogout()
+                }) { Text("退出", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askLogout = false }) { Text("取消", color = Ink.muted) }
+            },
         )
     }
 }

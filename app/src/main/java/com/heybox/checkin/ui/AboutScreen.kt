@@ -41,6 +41,7 @@ import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.R
 import com.heybox.checkin.data.Diagnostics
 import com.heybox.checkin.data.UpdateCheck
+import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.glass
 import com.heybox.checkin.ui.theme.NumberSmall
@@ -249,18 +250,20 @@ private sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
     data object UpToDate : UpdateState
-    data class Newer(val tag: String, val url: String) : UpdateState
+    data class Newer(val info: UpdateInfo) : UpdateState
     data class Failed(val reason: String) : UpdateState
 }
 
 /**
- * 版本自检入口。只在这一处联网，且必须用户点击：后台轮询既费电，也会暴露「这台机器在跑盒签」。
+ * 版本自检入口（手动）。启动时也会自动查一次，见 HomeScreen；不做后台轮询。
  */
 @Composable
 private fun UpdateRow() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    // 有新版本时不直接跳浏览器，先给「应用内更新 / 浏览器」两个选择
+    var dialog by remember { mutableStateOf<UpdateInfo?>(null) }
 
     val check: () -> Unit = {
         scope.launch {
@@ -268,7 +271,7 @@ private fun UpdateRow() {
             state = UpdateCheck.latest().fold(
                 onSuccess = { info ->
                     if (UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) {
-                        UpdateState.Newer(info.tag, info.url)
+                        UpdateState.Newer(info)
                     } else {
                         UpdateState.UpToDate
                     }
@@ -300,8 +303,8 @@ private fun UpdateRow() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("有新版本 ${s.tag}", style = MaterialTheme.typography.bodySmall, color = Ink.accent)
-                LinkAction("前往下载 →") { openUrl(context, s.url) }
+                Text("有新版本 ${s.info.tag}", style = MaterialTheme.typography.bodySmall, color = Ink.accent)
+                LinkAction("更新 →") { dialog = s.info }
             }
 
             is UpdateState.Failed -> {
@@ -318,6 +321,10 @@ private fun UpdateRow() {
                     LinkAction("打开下载页 →") { openUrl(context, UpdateCheck.RELEASES_URL) }
                 }
             }
+        }
+
+        dialog?.let { info ->
+            UpdateDialog(info = info, onDismiss = { dialog = null })
         }
     }
 }
