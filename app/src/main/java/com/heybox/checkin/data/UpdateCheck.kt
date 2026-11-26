@@ -6,11 +6,15 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** 更新日志里的一条改动：[section] 是「新增 / 优化 / 修复 / 安全」，[text] 是条目正文。 */
+data class NoteItem(val section: String, val text: String)
+
 /**
  * 远端最新版本信息。
  *
  * [url] 是 Release 页面；[apkUrl]/[apkSize]/[shaUrl] 来自 Release 附件，
- * 有直链才能应用内更新；[notes] 是发版说明前几行，弹窗里给用户看一眼改了什么。
+ * 有直链才能应用内更新；[changes] 是按分节拆好的改动条目，弹窗按条展示；
+ * [notes] 是解析失败时的兜底纯文本。
  */
 data class UpdateInfo(
     val tag: String,
@@ -19,6 +23,7 @@ data class UpdateInfo(
     val apkSize: Long? = null,
     val shaUrl: String? = null,
     val notes: String? = null,
+    val changes: List<NoteItem> = emptyList(),
 )
 
 /**
@@ -94,14 +99,48 @@ object UpdateCheck {
             ?.takeIf { it.isNotEmpty() }
 
         val apk = assets.firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
+        val body = json.optString("body")
         return UpdateInfo(
             tag = tag,
             url = url,
             apkUrl = apk?.optString("browser_download_url")?.trim()?.takeIf { it.isNotEmpty() },
             apkSize = apk?.optLong("size")?.takeIf { it > 0L },
             shaUrl = assetUrl { it.endsWith(".apk.sha256", ignoreCase = true) },
-            notes = json.optString("body").let(::summarizeNotes),
+            notes = body.let(::summarizeNotes),
+            changes = parseChanges(body),
         )
+    }
+
+    /** 只认用户关心的分节；「工程」「安装」「校验」这些不进弹窗。 */
+    private val SECTIONS = setOf("新增", "优化", "修复", "安全")
+
+    /**
+     * 把 Release 正文拆成「分节 + 条目」。
+     *
+     * 更新日志固定按 `### 新增 / 优化 / 修复` 分条写，弹窗据此逐条显示，
+     * 用户不用在弹窗里读一整段。正文没有分节（老版本日志）时返回空，
+     * 由 [summarizeNotes] 兜底。
+     */
+    internal fun parseChanges(body: String, limit: Int = Int.MAX_VALUE): List<NoteItem> {
+        val items = ArrayList<NoteItem>()
+        var section: String? = null
+        for (raw in body.replace("\r\n", "\n").lineSequence()) {
+            val line = raw.trim()
+            if (line.startsWith("#")) {
+                section = line.trimStart('#').trim().takeIf { it in SECTIONS }
+                continue
+            }
+            val current = section ?: continue
+            if (!line.startsWith("- ") && !line.startsWith("* ")) continue
+            val text = line.removePrefix("- ").removePrefix("* ")
+                .replace("**", "")
+                .replace("`", "")
+                .trim()
+            if (text.isEmpty()) continue
+            items += NoteItem(current, text)
+            if (items.size >= limit) break
+        }
+        return items
     }
 
     /** [latest] 是否比 [current] 新。两边的 `v` 前缀、缺省段、`-beta` 后缀都能处理。 */

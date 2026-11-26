@@ -32,8 +32,11 @@ import com.heybox.checkin.core.DeviceInfo
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.core.SessionInfo
 import com.heybox.checkin.data.FailureKind
+import com.heybox.checkin.data.NoteItem
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.UpdateCheck
+import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.ui.theme.HeyboxTheme
 import com.heybox.checkin.ui.theme.GlassBackdrop
 import com.heybox.checkin.ui.theme.LocalBackdrop
@@ -209,6 +212,18 @@ private fun previewRunHistory(missed: Boolean = false): List<RunRecord> {
     }
 }
 
+/** 走查更新弹窗用的假数据：三条改动，用来验证「只显示两条 + 全部 N 条」。 */
+private fun previewUpdateInfo() = UpdateInfo(
+    tag = "v1.6.2",
+    url = UpdateCheck.RELEASES_URL,
+    apkSize = 8_820_850,
+    changes = listOf(
+        NoteItem("优化", "更新提示按「新增 / 优化 / 修复」分条显示本版改动，不再堆成一整段"),
+        NoteItem("修复", "首页出现提示条时，「立即执行一次」被悬浮底栏遮挡"),
+        NoteItem("优化", "这一条只用来验证超出的「全部 3 条改动」链接"),
+    ),
+)
+
 @Composable
 private fun App(
     store: SessionStore,
@@ -260,6 +275,12 @@ private fun App(
         debuggable && activity?.intent?.getBooleanExtra("preview_missed", false) == true
     }
     val previewHistory = remember { previewRunHistory(missed = previewMissed) }
+    // 设计走查用：直接弹一次更新弹窗，检查改动条目的排版
+    val previewUpdate = remember {
+        val activity = context as? ComponentActivity
+        val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        debuggable && activity?.intent?.getBooleanExtra("preview_update", false) == true
+    }
 
     Box(
         modifier = Modifier
@@ -286,6 +307,7 @@ private fun App(
                 store = store,
                 config = config ?: previewConfig,
                 previewHistory = if (previewHome) previewHistory else null,
+                previewUpdate = if (previewUpdate) previewUpdateInfo() else null,
                 appearance = appearance,
                 darkTheme = darkTheme,
                 resumeTick = resumeTick,

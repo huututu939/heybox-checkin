@@ -164,6 +164,7 @@ fun HomeScreen(
     resumeTick: Int,
     previewExpired: Boolean = false,
     previewHistory: List<RunRecord>? = null,
+    previewUpdate: UpdateInfo? = null,
     onAppearanceChange: (String) -> Unit,
     onRelogin: () -> Unit,
     onLogout: () -> Unit,
@@ -191,10 +192,10 @@ fun HomeScreen(
     var launching by remember { mutableStateOf(false) }
     var sawRunning by remember { mutableStateOf(false) }
     // 启动时自动查一次更新；失败就静默，别拿网络问题烦人
-    var update by remember { mutableStateOf<UpdateInfo?>(null) }
+    var update by remember { mutableStateOf(previewUpdate) }
     var showPermissionHelp by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (previewHistory != null) return@LaunchedEffect
+        if (previewHistory != null || previewUpdate != null) return@LaunchedEffect
         // 12 小时内查过就不再打 GitHub：未认证接口 60 次/小时/IP，开关几次 App 就会撞 403
         if (!UpdateCheck.shouldAutoCheck(store.updateCheckedAt(), store.updateCheckOk())) return@LaunchedEffect
         val result = UpdateCheck.latest()

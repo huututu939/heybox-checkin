@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,9 +21,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.heybox.checkin.BuildConfig
@@ -142,14 +146,55 @@ internal fun UpdateDialog(
             },
         )
 
-        info.notes?.let { notes ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                notes,
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink.muted,
-                lineHeight = 18.sp,
-            )
+        // 按「新增 / 优化 / 修复」逐条显示；弹窗里最多两条，其余去 Release 页面看
+        val shown = remember(info.tag) { info.changes.take(2) }
+        if (shown.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            shown.forEach { item ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        item.section,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Ink.accent,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            // 大字体下让标签自己变宽，别把「新增」压成两行
+                            .widthIn(min = 30.dp)
+                            .padding(top = 2.dp, end = 8.dp),
+                    )
+                    Text(
+                        item.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ink.muted,
+                        lineHeight = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+            }
+            if (info.changes.size > shown.size) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "全部 ${info.changes.size} 条改动 →",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.accent,
+                    modifier = Modifier.clickable { openUrl(context, info.url) },
+                )
+            }
+        } else {
+            // 正文没有分节的旧版日志：退回一段摘要
+            info.notes?.let { notes ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Ink.muted,
+                    lineHeight = 18.sp,
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))

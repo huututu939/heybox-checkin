@@ -108,6 +108,71 @@ class UpdateCheckTest {
     }
 
     @Test
+    fun `按分节拆出改动条目`() {
+        val items = UpdateCheck.parseChanges(
+            """## 盒签 v1.6.2
+
+### 新增
+
+- 失败原因分类
+
+- 记录页月历
+
+### 修复
+
+- 首页按钮被底栏遮挡"""
+        )
+        assertEquals(3, items.size)
+        assertEquals("新增", items[0].section)
+        assertEquals("失败原因分类", items[0].text)
+        assertEquals("修复", items[2].section)
+        assertEquals("首页按钮被底栏遮挡", items[2].text)
+    }
+
+    @Test
+    fun `安装校验和工程分节不进弹窗`() {
+        val items = UpdateCheck.parseChanges(
+            """### 工程
+
+- 更新流水线
+
+### 优化
+
+- 更新提示更简洁
+
+### 安装
+
+- 下载 app-release.apk
+
+### 校验
+
+- SHA-256 见附件"""
+        )
+        assertEquals(1, items.size)
+        assertEquals("更新提示更简洁", items[0].text)
+    }
+
+    @Test
+    fun `旧格式没有分节时交给摘要兜底`() {
+        assertTrue(UpdateCheck.parseChanges("这版改了不少东西\n\n- 一条没有分节的说明").isEmpty())
+    }
+
+    @Test
+    fun `可以限制条目数量`() {
+        val items = UpdateCheck.parseChanges(
+            """### 优化
+
+- 一
+
+- 二
+
+- 三""",
+            limit = 2,
+        )
+        assertEquals(2, items.size)
+    }
+
+    @Test
     fun `太长时截断并补省略号`() {
         val long = "- " + "这是一句很长的更新说明".repeat(20)
         val notes = UpdateCheck.summarizeNotes(long, maxChars = 40)!!
