@@ -31,6 +31,7 @@ import androidx.core.view.WindowCompat
 import com.heybox.checkin.core.DeviceInfo
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.core.SessionInfo
+import com.heybox.checkin.data.FailureKind
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.ui.theme.HeyboxTheme
@@ -152,8 +153,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** 设计走查用的假数据：最近七天里 19/20/22/23 完成，21 没记录，24 跳过，25 今天完成。 */
-private fun previewRunHistory(): List<RunRecord> {
+/**
+ * 设计走查用的假数据：最近 35 天绝大多数完成，偶尔跳过，两天失败。
+ *
+ * @param missed 为 true 时最近三天都失败，用来看「连续没签上」提示条。
+ */
+private fun previewRunHistory(missed: Boolean = false): List<RunRecord> {
     fun at(daysAgo: Int): Long = java.util.Calendar.getInstance().apply {
         add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
         set(java.util.Calendar.HOUR_OF_DAY, 9 + daysAgo % 5)
@@ -169,7 +174,8 @@ private fun previewRunHistory(): List<RunRecord> {
         coinDelta = 300,
         batteryDelta = 1,
         exp = 170,
-        coin = 766,
+        // 余额要能看出走势，走势图才有东西可画
+        coin = 700L + (34 - daysAgo) * 4L,
         battery = 5,
         level = 3,
         maxExp = 200,
@@ -186,12 +192,15 @@ private fun previewRunHistory(): List<RunRecord> {
 
     fun failed(daysAgo: Int) = RunRecord.failure(
         at = at(daysAgo),
-        message = if (daysAgo % 2 == 0) "HTTP 500" else "登录已过期",
-    ).withBalanceOf(done(daysAgo))
+        message = if (daysAgo % 2 == 0) "小黑盒服务器 500" else "网络没接通",
+        kind = if (daysAgo % 2 == 0) FailureKind.SERVER else FailureKind.NETWORK,
+        // 失败那天任务没跑完，四件里不该显示「已完成」
+    ).withBalanceOf(done(daysAgo)).copy(taskStates = emptyMap())
 
     // 造 35 天的数据：绝大多数完成，偶尔跳过，两天失败，用来检查月分组和失败原因
     return (34 downTo 0).map { daysAgo ->
         when {
+            missed && daysAgo <= 2 -> failed(daysAgo)
             daysAgo == 0 -> done(0)
             daysAgo == 9 || daysAgo == 23 -> failed(daysAgo)
             daysAgo % 7 == 3 -> skipped(daysAgo)
@@ -244,7 +253,13 @@ private fun App(
             device = DeviceInfo(model = "JER-AN10", osVersion = "12"),
         )
     }
-    val previewHistory = remember { previewRunHistory() }
+    // 设计走查用：让假数据最近三天都失败，检查「连续没签上」提示条
+    val previewMissed = remember {
+        val activity = context as? ComponentActivity
+        val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        debuggable && activity?.intent?.getBooleanExtra("preview_missed", false) == true
+    }
+    val previewHistory = remember { previewRunHistory(missed = previewMissed) }
 
     Box(
         modifier = Modifier

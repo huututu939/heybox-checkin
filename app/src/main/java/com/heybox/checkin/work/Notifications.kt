@@ -13,6 +13,12 @@ import com.heybox.checkin.ui.MainActivity
 object Notifications {
 
     const val CHANNEL_ID = "checkin"
+
+    /**
+     * 连续失败用的第二条通道：普通通道是 LOW（无声），
+     * 「连着几天没签上」必须能响一次，否则仍然是静默失败。
+     */
+    private const val WARN_CHANNEL_ID = "checkin_warn"
     private const val SERVICE_ID = 10
     private const val RESULT_ID = 11
     private const val RETRY_REQUEST = 42
@@ -23,6 +29,13 @@ object Notifications {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "自动签到", NotificationManager.IMPORTANCE_LOW).apply {
                     description = "每日签到进度与结果"
+                },
+            )
+        }
+        if (manager.getNotificationChannel(WARN_CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(WARN_CHANNEL_ID, "连续失败提醒", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "连续多天没签上时提醒一次"
                 },
             )
         }
@@ -43,15 +56,38 @@ object Notifications {
         context.getSystemService(NotificationManager::class.java).notify(SERVICE_ID, serviceNotification(context, text))
     }
 
-    fun result(context: Context, success: Boolean, text: String) {
+    /**
+     * 执行结果通知。
+     *
+     * @param hint 失败时给用户的下一步（来自 [com.heybox.checkin.data.Failure.hint]）；
+     * @param streak 连续没签上的天数，≥2 时换成会响的通道并直接把天数写进标题。
+     */
+    fun result(
+        context: Context,
+        success: Boolean,
+        text: String,
+        hint: String? = null,
+        streak: Int = 0,
+    ) {
+        val warn = !success && streak >= 2
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.notify(
             RESULT_ID,
-            NotificationCompat.Builder(context, CHANNEL_ID)
+            NotificationCompat.Builder(context, if (warn) WARN_CHANNEL_ID else CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_checkin)
-                .setContentTitle(if (success) "今日签到完成" else "签到失败")
+                .setContentTitle(
+                    when {
+                        success -> "今日签到完成"
+                        warn -> "连续 $streak 天没签上"
+                        else -> "签到失败"
+                    },
+                )
                 .setContentText(text)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setStyle(
+                    NotificationCompat.BigTextStyle().bigText(
+                        if (hint.isNullOrBlank()) text else "$text\n$hint",
+                    ),
+                )
                 .setAutoCancel(true)
                 .setContentIntent(openApp(context))
                 .apply {

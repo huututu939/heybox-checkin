@@ -114,6 +114,7 @@ class SessionStore(context: Context) {
             expDelta?.let { put("exp_delta", it) }
             put("coin_delta", coinDelta)
             error?.let { put("error", it) }
+            errorKind?.let { put("error_kind", it) }
             batteryDelta?.let { put("battery_delta", it) }
             put("exp", exp)
             put("coin", coin)
@@ -143,6 +144,8 @@ class SessionStore(context: Context) {
             maxExp = if (json.has("max_exp")) json.optLong("max_exp") else null,
             signed = json.optBoolean("signed"),
             taskStates = states,
+            error = json.optString("error").takeIf { it.isNotEmpty() },
+            errorKind = json.optString("error_kind").takeIf { it.isNotEmpty() },
         )
     }
 
@@ -177,6 +180,23 @@ class SessionStore(context: Context) {
     fun skippedVersion(): String? = prefs.getString(KEY_SKIPPED_VERSION, null)
 
     fun skipVersion(tag: String) = prefs.edit().putString(KEY_SKIPPED_VERSION, tag).apply()
+
+    /**
+     * 上次自动查更新的时刻。GitHub 未认证接口按 IP 限流 60 次/小时，
+     * 而首页每次冷启动都会查一次——反复开关 App 会把自己查进 403。
+     */
+    fun updateCheckedAt(): Long = prefs.getLong(KEY_UPDATE_CHECKED_AT, 0L)
+
+    /** 上次自动检查是否成功：失败只等一小时就重试，成功等十二小时。 */
+    fun updateCheckOk(): Boolean = prefs.getBoolean(KEY_UPDATE_CHECK_OK, true)
+
+    fun markUpdateChecked(
+        at: Long = System.currentTimeMillis(),
+        ok: Boolean = true,
+    ) = prefs.edit()
+        .putLong(KEY_UPDATE_CHECKED_AT, at)
+        .putBoolean(KEY_UPDATE_CHECK_OK, ok)
+        .apply()
 
     fun setHideFromRecents(enabled: Boolean) =
         prefs.edit().putBoolean(KEY_HIDE_RECENT, enabled).apply()
@@ -297,6 +317,8 @@ class SessionStore(context: Context) {
 
         private const val KEY_SKIPPED_VERSION = "skipped_version"
         private const val KEY_PERMISSION_HELP = "permission_help_seen"
+        private const val KEY_UPDATE_CHECKED_AT = "update_checked_at"
+        private const val KEY_UPDATE_CHECK_OK = "update_check_ok"
 
         const val MAX_RETRIES = 2
 

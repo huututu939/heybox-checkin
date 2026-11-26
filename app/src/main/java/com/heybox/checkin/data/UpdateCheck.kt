@@ -32,6 +32,29 @@ object UpdateCheck {
     /** Releases 最新页：检查失败（墙、限流）时也让用户能手动打开。 */
     const val RELEASES_URL = "https://github.com/huututu939/heybox-checkin/releases/latest"
 
+    /**
+     * 自动检查的最小间隔。
+     *
+     * GitHub 未认证接口按 IP 限流 60 次/小时，而首页每次冷启动都会查一次：
+     * 反复开关 App 会把自己查进 403，之后再想查就得等限流窗口过去。
+     * 12 小时对「一天内出新版」已经够快，手动检查不受这个限制。
+     */
+    const val AUTO_INTERVAL_MS = 12L * 3600 * 1000
+
+    /** 上次没查成功时早一点再试（断网、被墙都是暂时的），但别每分钟都打。 */
+    const val AUTO_RETRY_MS = 3600 * 1000L
+
+    internal fun shouldAutoCheck(
+        lastCheckedAt: Long,
+        lastOk: Boolean = true,
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        if (lastCheckedAt <= 0L) return true
+        // 时钟回拨 / 改过系统时间：别把用户永久卡在「不检查」
+        if (lastCheckedAt > now) return true
+        return now - lastCheckedAt >= if (lastOk) AUTO_INTERVAL_MS else AUTO_RETRY_MS
+    }
+
     private const val API =
         "https://api.github.com/repos/huututu939/heybox-checkin/releases/latest"
 

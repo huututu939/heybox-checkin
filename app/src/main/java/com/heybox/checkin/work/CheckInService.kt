@@ -9,8 +9,12 @@ import com.heybox.checkin.core.SessionExpiredException
 import com.heybox.checkin.core.TaskParser
 import com.heybox.checkin.core.TaskRunner
 import com.heybox.checkin.widget.Widgets
+import com.heybox.checkin.data.Failure
+import com.heybox.checkin.data.FailureKind
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.classifyFailure
+import com.heybox.checkin.data.missStreak
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,10 +64,10 @@ class CheckInService : Service() {
      * 失败也记一笔，记录页才能说清哪天为什么没签上。
      * 今天已经成功过就不再写入：别把一次手动重试的失败盖在成功记录上。
      */
-    private fun recordFailure(store: SessionStore, message: String) {
+    private fun recordFailure(store: SessionStore, message: String, kind: FailureKind) {
         val today = todayRun(store)
         if (today?.signed == true) return
-        val failure = RunRecord.failure(System.currentTimeMillis(), message)
+        val failure = RunRecord.failure(System.currentTimeMillis(), message, kind)
         store.saveRun(today?.let { failure.withBalanceOf(it) } ?: failure)
     }
 
@@ -137,29 +141,36 @@ class CheckInService : Service() {
             // 服务被系统回收 / 主动停止：把取消继续往上抛，不要报成签到失败。
             throw e
         } catch (e: SessionExpiredException) {
+            val failure = classifyFailure(e)
             store.markSessionExpired()
-            store.setLastResult("登录已过期：${e.message}")
-            recordFailure(store, "登录已过期")
-            finish(store, false, "登录已过期，打开 App 重新登录", retry = false)
+            store.setLastResult("登录已过期：${failure.message}")
+            recordFailure(store, failure.message, failure.kind)
+            finish(store, false, failure.message, retry = false, failure = failure)
         } catch (e: Exception) {
-            val message = e.message ?: e.javaClass.simpleName
-            store.setLastResult("失败：$message")
-            recordFailure(store, message)
-            // 手动点「立即重试」时不再自动重试，避免连点造成的循环。
-            finish(store, false, message, retry = !force)
+            val failure = classifyFailure(e)
+            store.setLastResult("失败：${failure.message}")
+            recordFailure(store, failure.message, failure.kind)
+            // 手动点「立即重试」时不再自动重试，避免连点造成的循环；
+            // 人机验证重试多少次都过不去，也直接省掉这次重试预算。
+            val retry = !force && failure.kind != FailureKind.CAPTCHA
+            finish(store, false, failure.message, retry = retry, failure = failure)
         }
     }
 
     /**
      * @param retry 失败时是否用当天重试预算再试一次（10–25 分钟后），预算用完就排到明天。
+     * @param failure 失败分类；连续漏签天数会把今天这次算进去，≥2 天时通知会响一声。
      */
     private fun finish(
         store: SessionStore,
         success: Boolean,
         text: String,
         retry: Boolean = false,
+        failure: Failure? = null,
     ) {
-        Notifications.result(this, success, text)
+        // 必须在 recordFailure 之后算，否则今天这次还没落库，连续天数会少一天
+        val streak = if (success) 0 else missStreak(store.history())
+        Notifications.result(this, success, text, hint = failure?.hint, streak = streak)
         when {
             success -> {
                 store.resetRetry()

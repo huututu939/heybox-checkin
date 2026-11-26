@@ -28,6 +28,8 @@ data class RunRecord(
     val taskStates: Map<String, String>,
     /** 这次执行失败的原因。失败也会落到历史里，方便回看为什么没签上。 */
     val error: String? = null,
+    /** 失败分类（[FailureKind.key]）：记录页据此着色，界面不必再解析文案。 */
+    val errorKind: String? = null,
 ) {
     companion object {
         fun from(snapshot: TaskSnapshot, signed: Boolean, report: RunReport? = null): RunRecord =
@@ -47,7 +49,7 @@ data class RunRecord(
             )
 
         /** 一次失败：没有可用的余额快照，余额由调用方用 [withBalanceOf] 补上。 */
-        fun failure(at: Long, message: String): RunRecord =
+        fun failure(at: Long, message: String, kind: FailureKind = FailureKind.OTHER): RunRecord =
             RunRecord(
                 at = at,
                 executed = true,
@@ -62,6 +64,7 @@ data class RunRecord(
                 signed = false,
                 taskStates = emptyMap(),
                 error = message,
+                errorKind = kind.key,
             )
     }
 

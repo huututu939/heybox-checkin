@@ -119,4 +119,33 @@ class UpdateCheckTest {
         assertFalse(UpdateCheck.looksOutdated("发送失败：HTTP 500"))
         assertFalse(UpdateCheck.looksOutdated(""))
     }
+
+    private val now = 1_800_000_000_000L
+
+    @Test
+    fun `从没查过就查一次`() {
+        assertTrue(UpdateCheck.shouldAutoCheck(0L, now = now))
+    }
+
+    @Test
+    fun `十二小时内不重复查`() {
+        assertFalse(UpdateCheck.shouldAutoCheck(now - 60_000L, now = now))
+        assertFalse(UpdateCheck.shouldAutoCheck(now - 11 * 3600_000L, now = now))
+    }
+
+    @Test
+    fun `超过十二小时再查`() {
+        assertTrue(UpdateCheck.shouldAutoCheck(now - 13 * 3600_000L, now = now))
+    }
+
+    @Test
+    fun `上次失败只等一小时`() {
+        assertFalse(UpdateCheck.shouldAutoCheck(now - 10 * 60_000L, lastOk = false, now = now))
+        assertTrue(UpdateCheck.shouldAutoCheck(now - 2 * 3600_000L, lastOk = false, now = now))
+    }
+
+    @Test
+    fun `系统时间被改到过去也不会永久不查`() {
+        assertTrue(UpdateCheck.shouldAutoCheck(now + 3600_000L, now = now))
+    }
 }

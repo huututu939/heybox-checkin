@@ -104,12 +104,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.BuildConfig
+import com.heybox.checkin.data.FailureKind
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SettingsExport
 import com.heybox.checkin.data.SharedSettings
 import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.missStreak
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
@@ -192,11 +194,14 @@ fun HomeScreen(
     var update by remember { mutableStateOf<UpdateInfo?>(null) }
     var showPermissionHelp by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (previewHistory == null) {
-            UpdateCheck.latest().onSuccess { info ->
-                val skipped = info.tag == store.skippedVersion()
-                if (!skipped && UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) update = info
-            }
+        if (previewHistory != null) return@LaunchedEffect
+        // 12 小时内查过就不再打 GitHub：未认证接口 60 次/小时/IP，开关几次 App 就会撞 403
+        if (!UpdateCheck.shouldAutoCheck(store.updateCheckedAt(), store.updateCheckOk())) return@LaunchedEffect
+        val result = UpdateCheck.latest()
+        store.markUpdateChecked(ok = result.isSuccess)
+        result.onSuccess { info ->
+            val skipped = info.tag == store.skippedVersion()
+            if (!skipped && UpdateCheck.isNewer(info.tag, BuildConfig.VERSION_NAME)) update = info
         }
     }
     val running by RunState.running.collectAsState()
@@ -245,6 +250,13 @@ fun HomeScreen(
         else -> "今日待执行"
     }
     val cells = weekCells(history, now)
+    // 连续没签上也属于「今天该知道的事」：闹钟被 ROM 清掉不会留下失败记录，
+    // 只靠记录页等用户自己翻是发现不了的
+    val missed = missStreak(history, now)
+    val lastFailure = history.firstOrNull { !it.signed && it.error != null }
+    val lastReason = lastFailure?.error
+    // 登录过期时横幅直接给「重新登录」，比让用户点进记录页自己判断有用
+    val needsRelogin = FailureKind.from(lastFailure?.errorKind) == FailureKind.SESSION
 
     LaunchedEffect(resumeTick) {
         // 预览模式不碰真实状态：不重排闹钟、不覆盖假数据。
@@ -346,6 +358,9 @@ fun HomeScreen(
                 error = error,
                 launching = launching,
                 stage = stage,
+                missed = missed,
+                lastReason = lastReason,
+                needsRelogin = needsRelogin,
                 scroll = todayScroll,
                 onRelogin = onRelogin,
                 onRun = runNow,
@@ -509,6 +524,9 @@ private fun TodayTab(
     error: String?,
     launching: Boolean,
     stage: String,
+    missed: Int,
+    lastReason: String?,
+    needsRelogin: Boolean,
     scroll: androidx.compose.foundation.ScrollState,
     onRelogin: () -> Unit,
     onRun: () -> Unit,
@@ -546,11 +564,21 @@ private fun TodayTab(
             Spacer(Modifier.height(14.dp))
             ExpiredBanner(onRelogin)
         }
+        // 登录过期时上面的横幅已经说明原因了，不再叠一条
+        if (!expired && missed >= 2) {
+            Spacer(Modifier.height(14.dp))
+            MissBanner(
+                days = missed,
+                reason = lastReason,
+                action = if (needsRelogin) "重新登录" else "看记录",
+                onClick = if (needsRelogin) onRelogin else onShowRecord,
+            )
+        }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         StatusRow(status = status, running = running)
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
         Text("今日到账", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
         Spacer(Modifier.height(6.dp))
         Figures(today)
@@ -558,7 +586,7 @@ private fun TodayTab(
         Spacer(Modifier.height(8.dp))
         Text(balanceText(today), style = NumberTiny, color = Ink.muted)
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(14.dp))
         WindowBlock(
             scheduled = scheduled,
             nextAt = nextAt,
@@ -566,7 +594,7 @@ private fun TodayTab(
             endHour = endHour,
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         SectionHead(title = "每日四件")
         Spacer(Modifier.height(10.dp))
         TaskTiles(
@@ -575,7 +603,7 @@ private fun TodayTab(
             onToggleShare = onToggleShare,
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         SectionHead(
             title = "最近七天",
             hint = "全部记录",
@@ -592,7 +620,7 @@ private fun TodayTab(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(14.dp))
         Button(
             // 登录过期时先修凭据：直接跑只会再失败一次。
             onClick = if (expired) onRelogin else onRun,
@@ -834,7 +862,7 @@ private fun Tile(name: String, state: String, modifier: Modifier, trailing: @Com
     Column(
         modifier = modifier
             // 用最小高度而不是固定高度：系统字体放大时卡片跟着长高，别把状态行裁掉
-            .heightIn(min = 86.dp)
+            .heightIn(min = 80.dp)
             .glass(RoundedCornerShape(20.dp), raised = false)
             .padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -1494,143 +1522,6 @@ private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/* ---------------------------------------------------------------- 记录 */
-
-@Composable
-fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
-    androidx.activity.compose.BackHandler { onBack() }
-    val now = System.currentTimeMillis()
-    // 记录页看全量（最近 30 天），首页那排还是只看七天
-    val cells = weekCells(history, now, days = SessionStore.HISTORY_DAYS).reversed()
-    val doneAll = cells.count { it.state == DayState.DONE }
-    val skippedAll = cells.count { it.state == DayState.SKIPPED }
-    val failedAll = cells.count { it.state == DayState.FAILED }
-
-    // 按月分组（新的在前）：每组一张卡 + 一个月份小结
-    val groups = ArrayList<Pair<String, MutableList<WeekCell>>>()
-    for (cell in cells) {
-        if (groups.isEmpty() || groups.last().first != cell.monthLabel) {
-            groups += cell.monthLabel to mutableListOf(cell)
-        } else {
-            groups.last().second += cell
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp),
-    ) {
-        Spacer(Modifier.height(8.dp))
-        TextButton(
-            onClick = onBack,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-        ) {
-            Text("← 返回", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
-        }
-        Spacer(Modifier.height(10.dp))
-        Text("记录", style = MaterialTheme.typography.displayLarge, color = Ink.ink)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "最近 ${SessionStore.HISTORY_DAYS} 天 · 完成 $doneAll 天",
-            style = MaterialTheme.typography.bodySmall,
-            color = Ink.muted,
-        )
-
-        groups.forEach { (label, list) ->
-            val done = list.count { it.state == DayState.DONE }
-            val failed = list.count { it.state == DayState.FAILED }
-            val skipped = list.count { it.state == DayState.SKIPPED }
-            Spacer(Modifier.height(18.dp))
-            Text(
-                buildString {
-                    append("$label · 完成 $done")
-                    if (skipped > 0) append(" · 跳过 $skipped")
-                    if (failed > 0) append(" · 失败 $failed")
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
-                modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .glass(RoundedCornerShape(24.dp))
-                    .padding(horizontal = 18.dp, vertical = 2.dp),
-            ) {
-                list.forEachIndexed { index, cell ->
-                    if (index > 0) HorizontalDivider(color = Ink.line, thickness = 1.dp)
-                    RecordRow(cell)
-                }
-            }
-        }
-        Spacer(Modifier.height(40.dp))
-    }
-}
-
-@Composable
-private fun RecordRow(cell: WeekCell) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.width(54.dp)) {
-            Text(cell.monthDay, style = NumberTiny, color = Ink.ink, fontSize = 13.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "周${cell.weekday}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
-                fontSize = 10.sp,
-                letterSpacing = 0.sp,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                when (cell.state) {
-                    DayState.DONE -> recordDeltaText(cell)
-                    DayState.SKIPPED -> "其它入口已完成"
-                    DayState.FAILED -> "签到没成功"
-                    DayState.NONE -> "没有记录"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (cell.state == DayState.DONE) Ink.ink else Ink.muted,
-                fontSize = 12.5.sp,
-            )
-            // 第二行只在真有额外信息时出现：完成给时间，失败给原因
-            val detail = when {
-                cell.state == DayState.FAILED -> cell.error?.let { "原因：$it" } ?: "没有留下失败原因"
-                cell.state == DayState.DONE && cell.time != null -> cell.time
-                else -> null
-            }
-            if (detail != null) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (cell.state == DayState.FAILED) Ink.error else Ink.muted,
-                    fontSize = 11.sp,
-                    letterSpacing = 0.sp,
-                )
-            }
-        }
-        if (cell.state == DayState.DONE) {
-            Spacer(Modifier.width(12.dp))
-            MiniCheck(Ink.success)
-        }
-    }
-}
-
-private fun recordDeltaText(cell: WeekCell): String {
-    val exp = cell.expDelta?.let { if (it >= 0) "+$it" else "$it" } ?: "—"
-    val battery = cell.batteryDelta?.let { if (it >= 0) " · 电池 +$it" else "" } ?: ""
-    return "经验 $exp · H 币 +${cell.coinDelta}$battery"
-}
-
 /* ---------------------------------------------------------------- 组件 */
 
 @Composable
@@ -1660,6 +1551,50 @@ private fun ExpiredBanner(onRelogin: () -> Unit) {
             modifier = Modifier
                 .clickable(onClick = onRelogin)
                 .padding(start = 12.dp),
+        )
+    }
+}
+
+/**
+ * 连续没签上时的提示条。
+ *
+ * 存在的理由不是「多一条提示」，而是这类失败最常见的成因（闹钟没响、后台被冻）
+ * 根本不会留下失败记录——不主动说，用户只会以为一直在正常签到。
+ */
+@Composable
+private fun MissBanner(days: Int, reason: String?, action: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Ink.error.copy(alpha = 0.08f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // 一行说清两件事：几天没签上、最近一次为什么；原因太长就省略，不换行把页面撑高
+        Text(
+            "连续 $days 天没签上",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Ink.error,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+        Text(
+            if (reason != null) " · $reason" else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.muted,
+            fontSize = 11.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            action,
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink.accent,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 10.dp),
         )
     }
 }
