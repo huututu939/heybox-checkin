@@ -2,7 +2,7 @@
 
 目标：备用机（无 SIM 卡）安装一款安卓原生 App，每天在 08:00–20:00 之间随机挑一个时刻自动完成小黑盒签到；分享任务按开关执行，默认关闭。路线为 **A：协议层直调官方接口**。
 
-当前版本：**v1.8.0（versionCode 26）**，签名 release 由 CI 出包并发布。
+当前版本：**v1.8.1（versionCode 27）**，签名 release 由 CI 出包并发布。
 
 ## 已锁定决策
 
@@ -34,6 +34,7 @@
 | M9 值守自愈与回顾 | 截止闹钟 + JobScheduler 看门狗、连续签到与月度汇总、依赖与 CI 加固 | 完成 |
 | M10 边角兜底与数据出口 | 当晚补签、时区重排、登录直达、90 天历史、CSV 导出、运行自检 | 完成 |
 | M11 工程加固 | 编排单测、HomeScreen 拆分、Dependabot、R8 回归清单 | 完成 |
+| M12 R8 上线 | 混淆 + 资源收缩，8.9 MB → 1.7 MB，真机回归通过 | 完成 |
 
 ## 本轮（v1.8.0）落地
 
@@ -55,7 +56,8 @@
 - 编排单测 `TaskRunnerTest`：假 Transport 走完「已签 / 签到 + 三分享 / 签到不确认 / 分享不结算 / 账号不匹配」五条路径；`TaskRunner` 加 `pause` 注入，测试不再真等几十秒。
 - `HomeScreen.kt` 1708 行拆成 `HomeScreen.kt`（壳、状态、工具）、`TodayScreen.kt`、`SettingsScreen.kt`；纯移动，模拟器截图对比无变化。
 - Dependabot：Gradle 每周、Actions 每月，按 androidx / kotlin 分组。
-- `docs/r8-checklist.md`：真机回归步骤与最小 keep 规则；R8 仍未开启。
+- `docs/r8-checklist.md`：真机回归步骤与最小 keep 规则。
+- R8（v1.8.1）：真机验证登录 / 设备令牌 / 小组件 / 自检后开启 `isMinifyEnabled + isShrinkResources`，release 8.9 MB → 1.7 MB；keep 规则在 `app/proguard-rules.pro`。
 
 ## 本轮（v1.7.0）落地
 
@@ -117,5 +119,5 @@
 2. APP 版本强制升级 → 签名常量与黄金向量都要换。
 3. 签到成功但奖励不到账（上游 issue #6，机房 IP + 固定行为触发的风控），自建只能缓解。
 4. 国产 ROM 夜间清理后台 → 依赖电池白名单 / 自启动 / 精确闹钟三项权限。
-5. 若日后打开 R8，按 `docs/r8-checklist.md` 在真机回归登录（WebView 设备令牌）与小组件，缺一步都别推 tag。
+5. R8 已开启：以后新增反射 / JS 桥 / 新协议库时，先按 `docs/r8-checklist.md` 补 keep 规则并在真机回归登录与小组件。
 6. 备用机长期插电，注意电池鼓包。

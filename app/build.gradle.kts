@@ -37,7 +37,8 @@ android {
 
     buildTypes {
         release {
-            // R8 测试分支：真机回归通过前不要合并回 main
+            // R8 已在 v1.8.1 真机回归（登录 / 设备令牌 / 小组件 / 更新）后开启；
+            // 以后新增反射或 JS 桥时，先按 docs/r8-checklist.md 补 keep 规则再发版。
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
