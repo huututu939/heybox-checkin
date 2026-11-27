@@ -26,6 +26,8 @@ class TaskRunner(
     private val onLog: (String) -> Unit = {},
     /** 允许执行的分享任务 id；不在集合里的直接跳过，签到不受影响。 */
     private val enabledShares: Set<String> = TaskParser.SHARE_IDS.toSet(),
+    /** 等待策略。单测传空实现跳过真实停顿，线上仍是 [delay]。 */
+    private val pause: suspend (Long) -> Unit = { delay(it) },
 ) {
 
     private val delays = longArrayOf(2000, 3000, 5000, 10000)
@@ -59,7 +61,7 @@ class TaskRunner(
             client.signResult()
             var verified = false
             for (wait in delays) {
-                delay(wait + Random.nextLong(0, 1000))
+                pause(wait + Random.nextLong(0, 1000))
                 val state = TaskParser.signState(client.signStateResult())
                 if (TaskParser.signedToday(state)) {
                     verified = true
@@ -97,13 +99,13 @@ class TaskRunner(
                 )
                 // 三步之间插入随机停顿：固定 2 秒的节奏本身就是可识别特征。
                 when (action) {
-                    "show" -> delay(1200L + Random.nextLong(0, 2500))
-                    "tap" -> delay(3000L + Random.nextLong(0, 4000))
+                    "show" -> pause(1200L + Random.nextLong(0, 2500))
+                    "tap" -> pause(3000L + Random.nextLong(0, 4000))
                 }
             }
             var settled = false
             for (wait in delays) {
-                delay(wait + Random.nextLong(0, 1000))
+                pause(wait + Random.nextLong(0, 1000))
                 absorb(TaskParser.snapshot(client.tasksResult(), account, enabledShares))
                 if (current.stateOf(id) == "finish") {
                     settled = true
