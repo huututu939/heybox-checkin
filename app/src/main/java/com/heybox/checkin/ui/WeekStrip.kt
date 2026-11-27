@@ -31,7 +31,10 @@ data class WeekCell(
     val year: Int = 0,
     val month: Int = 0,
     val day: Int = 0,
-)
+) {
+    /** 「年 * 100 + 月」，月份比较统一用它。 */
+    val monthKey: Int get() = year * 100 + month
+}
 
 /**
  * 把历史记录摊成最近 [days] 天的格子，按时间正序（最早在前、今天在后）。
@@ -79,6 +82,7 @@ internal data class MonthGrid(
     val cells: List<WeekCell?>,
 ) {
     val days: List<WeekCell> get() = cells.filterNotNull()
+    val monthKey: Int get() = year * 100 + month
 }
 
 /**
@@ -89,7 +93,7 @@ internal fun monthGrids(history: List<RunRecord>, now: Long, days: Int = 30): Li
     val cells = weekCells(history, now, days)
     val thisYear = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.YEAR)
     val groups = LinkedHashMap<Int, MutableList<WeekCell>>()
-    for (cell in cells) groups.getOrPut(cell.year * 100 + cell.month) { mutableListOf() } += cell
+    for (cell in cells) groups.getOrPut(cell.monthKey) { mutableListOf() } += cell
     return groups.values.map { list ->
         val first = list.first()
         MonthGrid(

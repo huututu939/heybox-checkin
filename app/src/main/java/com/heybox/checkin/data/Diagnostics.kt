@@ -1,10 +1,7 @@
 package com.heybox.checkin.data
 
-import android.app.NotificationManager
-import android.app.AlarmManager
 import android.content.Context
 import android.os.Build
-import android.os.PowerManager
 import com.heybox.checkin.BuildConfig
 import java.io.File
 import java.text.SimpleDateFormat
@@ -35,9 +32,18 @@ object Diagnostics {
             val next = store.nextTrigger()
             if (next > 0) "开启，下次 ${time(next)}" else "开启，下次时间未排定"
         } else "关闭")
-        sb.appendLine("通知权限: ${notificationState(context)}")
-        sb.appendLine("精确闹钟: ${exactAlarmState(context)}")
-        sb.appendLine("电池优化: ${batteryState(context)}")
+        sb.appendLine(
+            "通知权限: " +
+                (PermissionState.notificationBlockedReason(context)?.let { "不可用（$it）" } ?: "已允许"),
+        )
+        sb.appendLine(
+            "精确闹钟: " + when {
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "无需（API < 31）"
+                PermissionState.exactAlarmAllowed(context) -> "已授权"
+                else -> "未授权"
+            },
+        )
+        sb.appendLine("电池优化: " + if (PermissionState.batteryAllowed(context)) "已忽略限制" else "未忽略")
         sb.appendLine("今日已执行: ${store.ranToday()}")
         sb.appendLine("上次结果: ${store.lastResult()?.take(300) ?: "无"}")
         val crash = readCrash(context)
@@ -65,22 +71,6 @@ object Diagnostics {
             }
             previous?.uncaughtException(thread, error)
         }
-    }
-
-    private fun notificationState(context: Context): String {
-        if (Build.VERSION.SDK_INT < 33) return "系统未强制（API < 33）"
-        val nm = context.getSystemService(NotificationManager::class.java)
-        return if (nm.areNotificationsEnabled()) "已允许" else "已关闭"
-    }
-
-    private fun exactAlarmState(context: Context): String {
-        val am = context.getSystemService(AlarmManager::class.java)
-        return if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) "可用" else "未授权"
-    }
-
-    private fun batteryState(context: Context): String {
-        val pm = context.getSystemService(PowerManager::class.java)
-        return if (pm.isIgnoringBatteryOptimizations(context.packageName)) "已忽略限制" else "未忽略"
     }
 
     private fun time(ms: Long): String =

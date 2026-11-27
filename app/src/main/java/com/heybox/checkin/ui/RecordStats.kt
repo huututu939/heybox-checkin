@@ -2,7 +2,6 @@ package com.heybox.checkin.ui
 
 import com.heybox.checkin.core.TaskParser
 import com.heybox.checkin.data.RunRecord
-import com.heybox.checkin.data.SessionStore
 
 /** 一个自然月的汇总：完成 / 跳过 / 失败，以及月末相对月初的 H 币增量。 */
 internal data class MonthSummary(
@@ -23,6 +22,18 @@ internal fun monthSummary(days: List<WeekCell>): MonthSummary {
     )
 }
 
+/** 分享成功率的统计窗口。历史能留 90 天，但成功率看最近 30 天更有意义。 */
+internal const val SHARE_WINDOW_DAYS = 30
+
+/**
+ * 默认选中哪一天：优先当前月最近一条有记录的日子，其次当前月最后一天。
+ * 月初当天还没记录时，不能落到上个月，否则可见日历里没有高亮、也没有明细。
+ */
+internal fun defaultDay(cells: List<WeekCell>, newestMonthKey: Int?): WeekCell? {
+    val inMonth = cells.filter { it.monthKey == newestMonthKey }
+    return inMonth.lastOrNull { it.state != DayState.NONE } ?: inMonth.lastOrNull()
+}
+
 /** 最近 30 天的分享任务：尝试次数 vs 最终 finish 的次数。 */
 internal data class ShareSummary(
     val attempts: Int,
@@ -38,7 +49,7 @@ internal data class ShareSummary(
 internal fun shareSummary(
     history: List<RunRecord>,
     now: Long = System.currentTimeMillis(),
-    days: Int = SessionStore.HISTORY_DAYS,
+    days: Int = SHARE_WINDOW_DAYS,
 ): ShareSummary {
     // 一天内多跑一次会合并成一条记录，这里按天去重后的历史直接数即可
     var attempts = 0

@@ -20,8 +20,8 @@ import java.util.Calendar
  *    它由精确闹钟广播触发，可以合法拉起前台服务（Android 12+ 的后台启动豁免）。
  * 2. 周期任务（[WatchdogJobService]，4 小时、可跨重启）：只负责把丢失的闹钟重新排上，
  *    不直接起服务——JobService 在后台没有拉起前台服务的豁免。
- * 3. 当晚补签：常规重试（2 次）用完、窗口也过了，但如果失败原因是网络/服务端/核对，
- *    且现在有网，再给一次机会。一天一次，避免把失败打成高频请求。
+ * 3. 当晚补签：常规重试都用完、窗口也过了，但失败原因是网络/服务端/核对，且现在有网，
+ *    再给一次机会。一天一次，避免把失败打成高频请求。
  */
 object Watchdog {
 
@@ -72,43 +72,57 @@ object Watchdog {
     }
 
     /**
-     * 当晚补签的判定：今天失败过、失败类型值得再试、窗口已结束、现在有网。
-     * 只做判断，预算由调用方扣。
+     * 当晚补签的判定：今天失败过、失败类型值得再试、窗口已结束、现在有网，
+     * 且没有一次常规重试正排着。只做判断，预算由调用方扣。
+     *
+     * @param pendingRetry 今天还有重试闹钟没到点。此时必须等它先跑：否则截止检查会在
+     * 同一晚叠出第二次请求，正是常规重试预算想避免的事。
      */
     fun shouldLateRetry(
         now: Long,
         record: RunRecord?,
         windowEnd: Long,
         hasNetwork: Boolean,
+        pendingRetry: Boolean = false,
     ): Boolean {
         if (record == null || record.signed || !record.executed) return false
         if (!Scheduler.isSameLocalDay(record.at, now)) return false
         if (now < windowEnd) return false
         if (!hasNetwork) return false
+        if (pendingRetry) return false
         return FailureKind.from(record.errorKind) in LATE_RETRY_KINDS
     }
 
-    /** 截止闹钟用：条件成立就直接拉起服务，能补的当场补。 */
-    fun catchUp(context: Context, now: Long = System.currentTimeMillis()): Boolean {
-        if (shouldRun(context, now)) return start(context)
-        if (!shouldLateRetry(context, now)) return false
-        // 预算先扣再起服务：起服务失败也不该在下一个 4 小时窗口再打一次
-        if (!SessionStore(context).takeLateRetry()) return false
-        return start(context)
-    }
+    /** 截止闹钟用：能补就当场拉起服务。 */
+    fun catchUp(context: Context, now: Long = System.currentTimeMillis()): Boolean =
+        when (decide(context, now)) {
+            Decision.CATCH_UP -> start(context)
+            // 预算先扣再起服务：起服务失败也不该在下一个 4 小时窗口再打一次
+            Decision.LATE_RETRY -> if (SessionStore(context).takeLateRetry()) start(context) else false
+            Decision.NONE -> false
+        }
 
     /** 周期任务用：不直接起服务，把下一次排到 1 分钟后，由闹钟去拉起。 */
     fun repairAlarm(context: Context, now: Long = System.currentTimeMillis()) {
-        if (shouldRun(context, now)) {
-            Scheduler.scheduleNext(context, now = now)
-            return
+        when (decide(context, now)) {
+            Decision.CATCH_UP -> Scheduler.scheduleNext(context, now = now)
+            Decision.LATE_RETRY -> {
+                val store = SessionStore(context)
+                if (!store.takeLateRetry()) return
+                // rearm 会把截止闹钟与看门狗一起补挂，幂等
+                Scheduler.rearm(context, now + 60_000L)
+            }
+            Decision.NONE -> Unit
         }
-        if (!shouldLateRetry(context, now)) return
-        val store = SessionStore(context)
-        if (!store.takeLateRetry()) return
-        val at = now + 60_000L
-        val ok = Scheduler.schedule(context, at)
-        store.setNextTrigger(if (ok) at else 0L)
+    }
+
+    /** 看门狗该做什么：正常补签 / 当晚补签 / 什么都不做。 */
+    private enum class Decision { NONE, CATCH_UP, LATE_RETRY }
+
+    private fun decide(context: Context, now: Long): Decision = when {
+        shouldRun(context, now) -> Decision.CATCH_UP
+        shouldLateRetry(context, now) -> Decision.LATE_RETRY
+        else -> Decision.NONE
     }
 
     private fun start(context: Context): Boolean = runCatching {
@@ -135,11 +149,13 @@ object Watchdog {
     private fun shouldLateRetry(context: Context, now: Long): Boolean {
         val store = SessionStore(context)
         if (!store.scheduledEnabled() || !store.hasCredentials()) return false
+        val next = store.nextTrigger()
         return shouldLateRetry(
             now = now,
             record = store.loadRun(),
             windowEnd = Scheduler.todayWindowEnd(now, store.windowStart(), store.windowEnd()),
             hasNetwork = hasNetwork(context),
+            pendingRetry = next > now && Scheduler.isSameLocalDay(next, now),
         )
     }
 

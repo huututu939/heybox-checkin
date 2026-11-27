@@ -3,6 +3,7 @@ package com.heybox.checkin
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.ui.DayState
 import com.heybox.checkin.ui.WeekCell
+import com.heybox.checkin.ui.defaultDay
 import com.heybox.checkin.ui.monthSummary
 import com.heybox.checkin.ui.shareSummary
 import java.util.Calendar
@@ -18,9 +19,9 @@ class RecordStatsTest {
             set(year, month - 1, day, hour, 10)
         }.timeInMillis
 
-    private fun cell(state: DayState, coin: Long = 0, day: Int = 1) = WeekCell(
-        monthDay = "11/$day",
-        monthLabel = "11月",
+    private fun cell(state: DayState, coin: Long = 0, day: Int = 1, month: Int = 11) = WeekCell(
+        monthDay = "$month/$day",
+        monthLabel = "${month}月",
         weekday = "一",
         state = state,
         today = false,
@@ -31,7 +32,7 @@ class RecordStatsTest {
         coin = coin,
         batteryDelta = null,
         year = 2026,
-        month = 11,
+        month = month,
         day = day,
     )
 
@@ -98,6 +99,41 @@ class RecordStatsTest {
         val share = shareSummary(history, now)
         assertEquals(0, share.attempts)
         assertEquals("—", share.text)
+    }
+
+    @Test
+    fun `分享统计只看最近 30 天`() {
+        val now = at(2026, 11, 25, 14)
+        val history = listOf(
+            record(now - 100 * 86_400_000L, mapOf("1" to "finish")),
+            record(now - 40 * 86_400_000L, mapOf("19" to "finish")),
+            record(now - 20 * 86_400_000L, mapOf("31" to "finish")),
+        )
+        // 只有 20 天前那条在窗口内
+        assertEquals(1, shareSummary(history, now).attempts)
+    }
+
+    @Test
+    fun `月初没有记录时默认选中当前月而不是上月`() {
+        val cells = listOf(
+            cell(DayState.DONE, day = 31, month = 10),
+            cell(DayState.NONE, day = 1, month = 11),
+        )
+        val selected = defaultDay(cells, newestMonthKey = 202611)
+        assertEquals(1, selected?.day)
+        assertEquals(11, selected?.month)
+    }
+
+    @Test
+    fun `默认选中当前月最近一个有记录的日子`() {
+        val cells = listOf(
+            cell(DayState.DONE, day = 30, month = 10),
+            cell(DayState.DONE, day = 1, month = 11),
+            cell(DayState.NONE, day = 2, month = 11),
+            cell(DayState.DONE, day = 3, month = 11),
+            cell(DayState.NONE, day = 4, month = 11),
+        )
+        assertEquals(3, defaultDay(cells, 202611)?.day)
     }
 
     @Test

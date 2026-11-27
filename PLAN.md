@@ -2,7 +2,7 @@
 
 目标：备用机（无 SIM 卡）安装一款安卓原生 App，每天在 08:00–20:00 之间随机挑一个时刻自动完成小黑盒签到；分享任务按开关执行，默认关闭。路线为 **A：协议层直调官方接口**。
 
-当前版本：**v1.8.1（versionCode 27）**，签名 release 由 CI 出包并发布。
+当前版本：**v1.8.2（versionCode 28）**，签名 release 由 CI 出包并发布。
 
 ## 已锁定决策
 
@@ -16,7 +16,7 @@
 | 调度 | AlarmManager 精确闹钟 + 前台服务（不用 WorkManager） |
 | 会话存储 | 自研 Android Keystore AES-GCM |
 | 分发 | 自用侧载 + 小范围群文件；非商业、不代签；是否对外分发由使用者评估平台协议与法律风险 |
-| 混淆 | release 暂不启 R8（WebView JS 桥无法在不丢登录态的前提下回归） |
+| 混淆 | release 开 R8 + 资源收缩（v1.8.1 起，真机回归登录与小组件后启用） |
 
 ## 里程碑
 
@@ -35,6 +35,20 @@
 | M10 边角兜底与数据出口 | 当晚补签、时区重排、登录直达、90 天历史、CSV 导出、运行自检 | 完成 |
 | M11 工程加固 | 编排单测、HomeScreen 拆分、Dependabot、R8 回归清单 | 完成 |
 | M12 R8 上线 | 混淆 + 资源收缩，8.9 MB → 1.7 MB，真机回归通过 | 完成 |
+| M13 审查修复 | 补签门控、时区重排、月份选中、权限探测合并、CSV 可见性 | 完成 |
+
+## 本轮（v1.8.2）审查修复
+
+Standards / Spec 两个轴并行审了 `v1.7.0...HEAD`，能落地的 10 条已修；纯风格项（SettingsScreen 再拆、Data Clumps）保留为技术债。
+
+- 当晚补签加「常规重试还排着就等它」门（`Watchdog.shouldLateRetry` 的 `pendingRetry`），避免同一晚两次请求；`repairAlarm` 改用 `Scheduler.rearm`，不再手写排闹钟。
+- 改时间 / 换时区重排用 `catchUp = false`，不再绕过网络与预算判定；错过的那次交给截止闹钟。
+- 记录页默认选中当前月的最近一天；月份 key 收进 `WeekCell.monthKey` / `MonthGrid.monthKey`。
+- 权限探测合并到 `data/PermissionState.kt`，诊断、自检、首页共用；自检按渠道判断通知是否真的发得出来，每个谓词只算一次。
+- 分享成功率固定 30 天（`SHARE_WINDOW_DAYS`），界面标注「分享任务 · 30 天」。
+- 首页状态从中文字符串改成 `TodayStatus` 枚举；`TodayTab` 去掉没用的 `hideRecent` 参数。
+- Manifest 补 `<queries>`，Android 11+ 导出记录时能正确识别 CSV 分享目标。
+- 文档：proguard 头注释、R8 清单、PLAN 已锁定决策与 keep 规则对齐。
 
 ## 本轮（v1.8.0）落地
 

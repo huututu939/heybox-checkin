@@ -97,11 +97,17 @@ class WatchdogTest {
     private fun failed(millis: Long, kind: FailureKind) =
         RunRecord.failure(millis, "测试失败", kind)
 
-    private fun late(record: RunRecord?, now: Long, network: Boolean = true) = Watchdog.shouldLateRetry(
+    private fun late(
+        record: RunRecord?,
+        now: Long,
+        network: Boolean = true,
+        pendingRetry: Boolean = false,
+    ) = Watchdog.shouldLateRetry(
         now = now,
         record = record,
         windowEnd = at(2026, 11, 27, 20),
         hasNetwork = network,
+        pendingRetry = pendingRetry,
     )
 
     @Test
@@ -114,6 +120,21 @@ class WatchdogTest {
     fun `窗口还没结束时不越过重试预算`() {
         val now = at(2026, 11, 27, 18)
         assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.NETWORK), now))
+    }
+
+    @Test
+    fun `常规重试还排着时不再叠加当晚补签`() {
+        val now = at(2026, 11, 27, 20, 30)
+        val record = failed(at(2026, 11, 27, 19, 55), FailureKind.NETWORK)
+        // 20:15 还有一次常规重试，截止检查要等它
+        assertFalse(late(record, now, pendingRetry = true))
+    }
+
+    @Test
+    fun `常规重试已经过点就允许当晚补签`() {
+        val now = at(2026, 11, 27, 20, 30)
+        val record = failed(at(2026, 11, 27, 14), FailureKind.NETWORK)
+        assertTrue(late(record, now, pendingRetry = false))
     }
 
     @Test

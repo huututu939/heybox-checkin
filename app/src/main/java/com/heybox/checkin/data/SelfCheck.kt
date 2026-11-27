@@ -1,11 +1,8 @@
 package com.heybox.checkin.data
 
-import android.app.AlarmManager
 import android.app.job.JobScheduler
 import android.content.Context
 import android.os.Build
-import android.os.PowerManager
-import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.work.Watchdog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,11 +18,20 @@ data class CheckItem(
 
 /**
  * 把「某天没跑」这类问题拆成可自查的几项：登录、通知、省电、精确闹钟、定时、看门狗、
- * 设备令牌、接口连通。全部只读本地状态 + 一次匿名 GET，不发送任何账号信息。
+ * 设备令牌、接口连通。权限判定统一走 [PermissionState]，全部只读本地状态 + 一次匿名 GET。
  */
 suspend fun runSelfCheck(context: Context): List<CheckItem> = withContext(Dispatchers.IO) {
     val store = SessionStore(context)
     val config = store.load()
+    // 每个谓词只算一次，ok 与 detail 用同一个结果，避免两次探测结果不一致
+    val notifyBlocked = PermissionState.notificationBlockedReason(context)
+    val battery = PermissionState.batteryAllowed(context)
+    val exact = PermissionState.exactAlarmAllowed(context)
+    val scheduled = store.scheduledEnabled()
+    val next = store.nextTrigger()
+    val watchdog = watchdogScheduled(context)
+    val token = !config?.session?.tokenId.isNullOrBlank()
+
     buildList {
         add(
             CheckItem(
@@ -41,34 +47,28 @@ suspend fun runSelfCheck(context: Context): List<CheckItem> = withContext(Dispat
         add(
             CheckItem(
                 label = "通知权限",
-                ok = NotificationManagerCompat.from(context).areNotificationsEnabled(),
-                detail = if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-                    "已允许"
-                } else {
-                    "已关闭，签到结果不会提醒"
-                },
+                ok = notifyBlocked == null,
+                detail = notifyBlocked ?: "已允许",
             ),
         )
         add(
             CheckItem(
                 label = "忽略电池优化",
-                ok = batteryOk(context),
-                detail = if (batteryOk(context)) "已忽略" else "未忽略，夜间容易被系统清理",
+                ok = battery,
+                detail = if (battery) "已忽略" else "未忽略，夜间容易被系统清理",
             ),
         )
         add(
             CheckItem(
                 label = "精确闹钟",
-                ok = exactAlarmOk(context),
+                ok = exact,
                 detail = when {
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "系统版本无需该权限"
-                    exactAlarmOk(context) -> "已允许"
+                    exact -> "已允许"
                     else -> "未允许，触发时间可能推迟"
                 },
             ),
         )
-        val scheduled = store.scheduledEnabled()
-        val next = store.nextTrigger()
         add(
             CheckItem(
                 label = "自动签到",
@@ -83,35 +83,20 @@ suspend fun runSelfCheck(context: Context): List<CheckItem> = withContext(Dispat
         add(
             CheckItem(
                 label = "值守看门狗",
-                ok = watchdogScheduled(context),
-                detail = if (watchdogScheduled(context)) "已注册" else "未注册，闹钟被清后没人补",
+                ok = watchdog,
+                detail = if (watchdog) "已注册" else "未注册，闹钟被清后没人补",
             ),
         )
         add(
             CheckItem(
                 label = "设备令牌",
-                ok = config?.session?.tokenId.isNullOrBlank().not(),
-                detail = if (config?.session?.tokenId.isNullOrBlank() == false) {
-                    "已生成"
-                } else {
-                    "缺少设备令牌，重新登录可修复"
-                },
+                ok = token,
+                detail = if (token) "已生成" else "缺少设备令牌，重新登录可修复",
             ),
         )
         val api = apiReachable()
         add(CheckItem(label = "接口连通", ok = api.first, detail = api.second))
     }
-}
-
-private fun batteryOk(context: Context): Boolean {
-    val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
-    return power.isIgnoringBatteryOptimizations(context.packageName)
-}
-
-private fun exactAlarmOk(context: Context): Boolean {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-    val manager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
-    return manager.canScheduleExactAlarms()
 }
 
 private fun watchdogScheduled(context: Context): Boolean {

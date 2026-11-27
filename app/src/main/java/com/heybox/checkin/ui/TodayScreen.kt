@@ -140,10 +140,20 @@ import com.heybox.checkin.widget.Widgets
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
+/** 首页状态。用枚举而不是中文串：文案和判断色只在这里改，不会散到三个文件。 */
+internal enum class TodayStatus(val label: String) {
+    RUNNING("执行中"),
+    INCOMPLETE("未完成"),
+    DONE("今日已完成"),
+    SIGNED("今日已签到"),
+    FAILED("今日失败"),
+    PENDING("今日待执行"),
+}
+
 @Composable
 internal fun TodayTab(
     config: HeyboxConfig,
-    status: String,
+    status: TodayStatus,
     running: Boolean,
     expired: Boolean,
     scheduled: Boolean,
@@ -153,7 +163,6 @@ internal fun TodayTab(
     today: RunRecord?,
     cells: List<WeekCell>,
     enabledShares: Set<String>,
-    hideRecent: Boolean,
     error: String?,
     launching: Boolean,
     stage: String,
@@ -293,12 +302,12 @@ internal fun TodayTab(
 }
 
 @Composable
-private fun StatusRow(status: String, running: Boolean) {
-    val color = when {
-        running -> Ink.accent
-        status == "今日已完成" || status == "今日已签到" -> Ink.success
-        status == "未完成" || status == "今日失败" -> MaterialTheme.colorScheme.error
-        else -> Ink.muted
+private fun StatusRow(status: TodayStatus, running: Boolean) {
+    val color = when (status) {
+        TodayStatus.DONE, TodayStatus.SIGNED -> Ink.success
+        TodayStatus.INCOMPLETE, TodayStatus.FAILED -> MaterialTheme.colorScheme.error
+        TodayStatus.RUNNING -> Ink.accent
+        TodayStatus.PENDING -> Ink.muted
     }
     val alpha = if (running) {
         val transition = rememberInfiniteTransition(label = "dot")
@@ -323,7 +332,7 @@ private fun StatusRow(status: String, running: Boolean) {
         )
         Spacer(Modifier.width(9.dp))
         Text(
-            status,
+            status.label,
             style = MaterialTheme.typography.headlineMedium,
             color = Ink.ink,
             modifier = Modifier.weight(1f),

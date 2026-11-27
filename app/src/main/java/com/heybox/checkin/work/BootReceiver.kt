@@ -22,7 +22,9 @@ class BootReceiver : BroadcastReceiver() {
         if (enabled) {
             val stored = store.nextTrigger()
             when {
-                timeChanged -> Scheduler.scheduleNext(context)
+                // 改时间/换时区：原时刻按旧窗口抽的，重新抽签；但不要在这里补跑，
+                // 否则会绕过当晚补签的网络与预算判定。错过的那次交给截止闹钟。
+                timeChanged -> Scheduler.scheduleNext(context, catchUp = false)
                 // 重启 / 覆盖安装会取消闹钟，但计划时间还在未来时不要重新抽签。
                 stored > System.currentTimeMillis() -> Scheduler.rearm(context, stored)
                 else -> Scheduler.scheduleNext(context)

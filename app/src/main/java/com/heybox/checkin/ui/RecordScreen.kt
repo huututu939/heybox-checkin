@@ -71,15 +71,13 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     val streak = remember(history) { signStreak(history, now) }
     val share = remember(history) { shareSummary(history, now) }
     val thisMonth = remember(months) { months.firstOrNull()?.let { monthSummary(it.days) } }
-    // 默认选今天；今天还没记录就选最近一个有记录的日子
-    var selected by remember(history) {
-        mutableStateOf(cells.lastOrNull { it.state != DayState.NONE } ?: cells.lastOrNull())
-    }
+    // 默认选当前月份；今天还没记录就选本月最近一个有记录的日子，保证选中态落在可见日历里
+    val newestMonth = months.firstOrNull()
+    val newestKey = newestMonth?.monthKey
+    var selected by remember(history) { mutableStateOf(defaultDay(cells, newestKey)) }
     // 90 天会有四个月，一次只展示选中的那个月
-    var selectedMonth by remember(months) {
-        mutableStateOf(months.firstOrNull()?.let { it.year * 100 + it.month })
-    }
-    val grid = months.firstOrNull { it.year * 100 + it.month == selectedMonth } ?: months.firstOrNull()
+    var selectedMonth by remember(months) { mutableStateOf(newestKey) }
+    val grid = months.firstOrNull { it.monthKey == selectedMonth } ?: newestMonth
 
     Column(
         modifier = Modifier
@@ -115,7 +113,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
             months = months,
             selected = selectedMonth,
             onSelect = { month ->
-                selectedMonth = month.year * 100 + month.month
+                selectedMonth = month.monthKey
                 // 切月时选中该月最近一天，明细不会停在别的月份
                 selected = month.days.lastOrNull { it.state != DayState.NONE } ?: month.days.lastOrNull()
             },
@@ -153,7 +151,7 @@ private fun MonthChips(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         months.forEach { grid ->
-            val active = grid.year * 100 + grid.month == selected
+            val active = grid.monthKey == selected
             Text(
                 grid.label,
                 style = MaterialTheme.typography.labelMedium,
@@ -219,7 +217,7 @@ private fun RecapCard(streak: Int, month: MonthSummary?, share: ShareSummary) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "分享任务",
+                    "分享任务 · 30 天",
                     style = MaterialTheme.typography.labelSmall,
                     color = Ink.muted,
                     fontSize = 10.5.sp,

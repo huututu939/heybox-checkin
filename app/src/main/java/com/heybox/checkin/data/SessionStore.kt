@@ -237,13 +237,7 @@ class SessionStore(context: Context) {
     fun markRanToday() = prefs.edit().putInt(KEY_LAST_RUN_DAY, todayKey()).apply()
 
     /** 当天失败后的重试预算，避免夜里失败后每两分钟重试一次、把失败打成高频请求。 */
-    fun takeRetry(): Boolean {
-        val today = todayKey()
-        val used = if (prefs.getInt(KEY_RETRY_DAY, 0) == today) prefs.getInt(KEY_RETRY_COUNT, 0) else 0
-        if (used >= MAX_RETRIES) return false
-        prefs.edit().putInt(KEY_RETRY_DAY, today).putInt(KEY_RETRY_COUNT, used + 1).apply()
-        return true
-    }
+    fun takeRetry(): Boolean = takeDailyBudget(KEY_RETRY_DAY, KEY_RETRY_COUNT, MAX_RETRIES)
 
     fun resetRetry() = prefs.edit().putInt(KEY_RETRY_COUNT, 0).apply()
 
@@ -251,11 +245,14 @@ class SessionStore(context: Context) {
      * 当晚最后一次补签的预算：窗口结束后才允许用，一天一次。
      * 和 [takeRetry] 分开，是因为它专门给「网络恢复了，但常规重试已经用完」这种情况。
      */
-    fun takeLateRetry(): Boolean {
+    fun takeLateRetry(): Boolean = takeDailyBudget(KEY_LATE_RETRY_DAY, KEY_LATE_RETRY_COUNT, 1)
+
+    /** 按天计数的预算：跨天自动归零，到上限后返回 false。 */
+    private fun takeDailyBudget(dayKey: String, countKey: String, limit: Int): Boolean {
         val today = todayKey()
-        val used = if (prefs.getInt(KEY_LATE_RETRY_DAY, 0) == today) prefs.getInt(KEY_LATE_RETRY_COUNT, 0) else 0
-        if (used >= 1) return false
-        prefs.edit().putInt(KEY_LATE_RETRY_DAY, today).putInt(KEY_LATE_RETRY_COUNT, 1).apply()
+        val used = if (prefs.getInt(dayKey, 0) == today) prefs.getInt(countKey, 0) else 0
+        if (used >= limit) return false
+        prefs.edit().putInt(dayKey, today).putInt(countKey, used + 1).apply()
         return true
     }
 

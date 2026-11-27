@@ -101,7 +101,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationManagerCompat
+import com.heybox.checkin.data.PermissionState
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.FailureKind
@@ -246,12 +246,12 @@ fun HomeScreen(
         enabledShares.all { run.taskStates[it] == "finish" }
     } == true
     val status = when {
-        running -> "执行中"
-        error != null -> "未完成"
-        ranToday && todayRecord?.signed == true && shareDone -> "今日已完成"
-        ranToday && todayRecord?.signed == true -> "今日已签到"
-        ranToday && todayRecord?.error != null -> "今日失败"
-        else -> "今日待执行"
+        running -> TodayStatus.RUNNING
+        error != null -> TodayStatus.INCOMPLETE
+        ranToday && todayRecord?.signed == true && shareDone -> TodayStatus.DONE
+        ranToday && todayRecord?.signed == true -> TodayStatus.SIGNED
+        ranToday && todayRecord?.error != null -> TodayStatus.FAILED
+        else -> TodayStatus.PENDING
     }
     val cells = weekCells(history, now)
     // 连续没签上也属于「今天该知道的事」：闹钟被 ROM 清掉不会留下失败记录，
@@ -358,7 +358,6 @@ fun HomeScreen(
                 today = todayRecord,
                 cells = cells,
                 enabledShares = enabledShares,
-                hideRecent = hideRecent,
                 error = error,
                 launching = launching,
                 stage = stage,
@@ -523,15 +522,11 @@ internal fun switchColors() = SwitchDefaults.colors(
 private fun recentHistory(store: SessionStore): List<RunRecord> =
     store.history().ifEmpty { listOfNotNull(store.loadRun()) }
 
-private fun readPermissions(context: Context): Permissions {
-    val notify = NotificationManagerCompat.from(context).areNotificationsEnabled()
-    val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-    val battery = power.isIgnoringBatteryOptimizations(context.packageName)
-    val alarm = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) true else {
-        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
-    }
-    return Permissions(notify, battery, alarm)
-}
+private fun readPermissions(context: Context): Permissions = Permissions(
+    notify = PermissionState.notificationsAllowed(context),
+    battery = PermissionState.batteryAllowed(context),
+    exactAlarm = PermissionState.exactAlarmAllowed(context),
+)
 
 private fun requestIgnoreBattery(context: Context) {
     val manager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
