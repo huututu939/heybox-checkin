@@ -83,7 +83,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     // Compose 2026.11 起要求 compileSdk 37.1；本机与 CI 只装了 37.0，
     // 升 SDK 单独一步做，先把 BOM 留在 2025.12（Compose 1.12）。
-    implementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.11.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
