@@ -31,7 +31,7 @@
 
 ## 下载安装
 
-到 [最新 Release](https://github.com/huututu939/heybox-checkin/releases/latest) 下载 `app-release.apk`，允许「安装未知来源应用」后侧载。
+到 [最新 Release](https://github.com/huututu939/heybox-checkin/releases/latest) 下载 `app-release.apk`（约 1.7 MB），允许「安装未知来源应用」后侧载。
 
 - 需要 Android 8.0 及以上
 - 备用机建议长期插电，关掉系统对它的省电限制

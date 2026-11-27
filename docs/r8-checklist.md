@@ -1,7 +1,9 @@
-# R8 开启清单（当前仍未开启）
+# R8 回归清单（v1.8.1 起已开启）
 
-release 构建现在 `isMinifyEnabled = false`。原因不是 R8 一定有问题，而是**登录必须走真实短信验证码**，
-模拟器无法完成，只能等有真机时一次性回归。下面的步骤按顺序做完，再改 `app/build.gradle.kts`。
+release 构建从 v1.8.1 起 `isMinifyEnabled = true` / `isShrinkResources = true`，包体 8.9 MB → 1.7 MB，
+已在真机回归登录（设备令牌）、签到、小组件、自检与更新。
+
+这份清单保留给以后改依赖、加反射 / JS 桥或调 keep 规则时重跑；不是待办。
 
 ## 1. 先确认没有隐式反射
 
@@ -37,7 +39,7 @@ release 构建现在 `isMinifyEnabled = false`。原因不是 R8 一定有问题
 `RunRecord` 没有用反射，字段名只影响自己写的 JSON key，理论上不受 R8 影响；留着是为了防止以后顺手改成
 Gson/Moshi 时踩坑。
 
-## 3. 改构建配置
+## 3. 构建配置（v1.8.1 已启用）
 
 ```kotlin
 release {
