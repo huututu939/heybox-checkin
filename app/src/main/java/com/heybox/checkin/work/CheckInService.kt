@@ -170,7 +170,14 @@ class CheckInService : Service() {
     ) {
         // 必须在 recordFailure 之后算，否则今天这次还没落库，连续天数会少一天
         val streak = if (success) 0 else missStreak(store.history())
-        Notifications.result(this, success, text, hint = failure?.hint, streak = streak)
+        Notifications.result(
+            this,
+            success = success,
+            text = text,
+            hint = failure?.hint,
+            streak = streak,
+            kind = failure?.kind,
+        )
         when {
             success -> {
                 store.resetRetry()

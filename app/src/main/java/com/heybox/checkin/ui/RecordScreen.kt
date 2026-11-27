@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +75,11 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     var selected by remember(history) {
         mutableStateOf(cells.lastOrNull { it.state != DayState.NONE } ?: cells.lastOrNull())
     }
+    // 90 天会有四个月，一次只展示选中的那个月
+    var selectedMonth by remember(months) {
+        mutableStateOf(months.firstOrNull()?.let { it.year * 100 + it.month })
+    }
+    val grid = months.firstOrNull { it.year * 100 + it.month == selectedMonth } ?: months.firstOrNull()
 
     Column(
         modifier = Modifier
@@ -104,21 +110,64 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         RecapCard(streak = streak, month = thisMonth, share = share)
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
+        MonthChips(
+            months = months,
+            selected = selectedMonth,
+            onSelect = { month ->
+                selectedMonth = month.year * 100 + month.month
+                // 切月时选中该月最近一天，明细不会停在别的月份
+                selected = month.days.lastOrNull { it.state != DayState.NONE } ?: month.days.lastOrNull()
+            },
+        )
+
+        Spacer(Modifier.height(10.dp))
         Legend()
 
-        BalanceTrend(history)
-
-        months.forEach { grid ->
-            Spacer(Modifier.height(14.dp))
+        grid?.let {
+            Spacer(Modifier.height(12.dp))
             MonthCard(
-                grid = grid,
+                grid = it,
                 selected = selected,
-                onSelect = { selected = it },
+                onSelect = { day -> selected = day },
             )
         }
 
+        BalanceTrend(history)
+
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** 月份切换：90 天有四个月，横向一排比纵向堆四张卡片更好扫。 */
+@Composable
+private fun MonthChips(
+    months: List<MonthGrid>,
+    selected: Int?,
+    onSelect: (MonthGrid) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        months.forEach { grid ->
+            val active = grid.year * 100 + grid.month == selected
+            Text(
+                grid.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (active) Ink.ink else Ink.muted,
+                fontSize = 12.sp,
+                letterSpacing = 0.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(if (active) Ink.raised else Color.Transparent)
+                    .border(1.dp, Ink.line, RoundedCornerShape(99.dp))
+                    .clickable { onSelect(grid) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            )
+        }
     }
 }
 

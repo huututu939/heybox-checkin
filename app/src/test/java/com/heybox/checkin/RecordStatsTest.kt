@@ -103,7 +103,8 @@ class RecordStatsTest {
     @Test
     fun `窗口外的记录不计入分享统计`() {
         val now = at(2026, 11, 25, 14)
-        val history = listOf(record(now - 40 * 86_400_000L, mapOf("1" to "finish")))
+        // 历史保留 90 天，这里取 100 天前
+        val history = listOf(record(now - 100 * 86_400_000L, mapOf("1" to "finish")))
         assertEquals(0, shareSummary(history, now).attempts)
     }
 }

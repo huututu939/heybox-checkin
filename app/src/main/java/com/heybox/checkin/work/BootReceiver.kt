@@ -6,15 +6,27 @@ import android.content.Intent
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.widget.Widgets
 
-/** 重启或应用更新后闹钟会丢：有计划时间就原样重落，没有才重新抽签；顺便刷新桌面小组件。 */
+/**
+ * 重启、应用更新、改时间 / 换时区后，闹钟都要重新落一次。
+ *
+ * 时间变更单独处理：随机时刻是按旧时区的窗口抽的，原样重落可能落到窗口外，
+ * 所以这里重新抽一次（窗口已经过则按补签逻辑排到 1–3 分钟后）。
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = SessionStore(context)
-        if (store.scheduledEnabled() && store.hasCredentials()) {
+        val enabled = store.scheduledEnabled() && store.hasCredentials()
+        val timeChanged = intent.action == Intent.ACTION_TIME_CHANGED ||
+            intent.action == Intent.ACTION_TIMEZONE_CHANGED
+
+        if (enabled) {
             val stored = store.nextTrigger()
-            // 重启 / 覆盖安装会取消闹钟，但计划时间还在未来时不要重新抽签。
-            if (stored > System.currentTimeMillis()) Scheduler.rearm(context, stored)
-            else Scheduler.scheduleNext(context)
+            when {
+                timeChanged -> Scheduler.scheduleNext(context)
+                // 重启 / 覆盖安装会取消闹钟，但计划时间还在未来时不要重新抽签。
+                stored > System.currentTimeMillis() -> Scheduler.rearm(context, stored)
+                else -> Scheduler.scheduleNext(context)
+            }
         }
         Widgets.refresh(context)
     }

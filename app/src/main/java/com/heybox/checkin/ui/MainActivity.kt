@@ -3,6 +3,7 @@ package com.heybox.checkin.ui
 import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -71,6 +73,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         resumeTick.intValue++
         skipHideOnLeave = false
+    }
+
+    /** 通知上的「重新登录」走 singleTop，这里把新 Intent 接过来。 */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        resumeTick.intValue++
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,6 +157,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** 登录过期通知的「重新登录」用它直达登录页。 */
+        const val EXTRA_OPEN_LOGIN = "open_login"
+
         /**
          * 从 App 内点开外部链接时置位一次：浏览器启动同样会触发 onUserLeaveHint，
          * 不跳过的话任务会被一起移除，用户从浏览器按返回就落到桌面而不是 App。
@@ -157,7 +169,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * 设计走查用的假数据：最近 35 天绝大多数完成，偶尔跳过，两天失败。
+ * 设计走查用的假数据：最近 95 天绝大多数完成，偶尔跳过，几个月各有一两天失败。
  *
  * @param missed 为 true 时最近三天都失败，用来看「连续没签上」提示条。
  */
@@ -200,12 +212,12 @@ private fun previewRunHistory(missed: Boolean = false): List<RunRecord> {
         // 失败那天任务没跑完，四件里不该显示「已完成」
     ).withBalanceOf(done(daysAgo)).copy(taskStates = emptyMap())
 
-    // 造 35 天的数据：绝大多数完成，偶尔跳过，两天失败，用来检查月分组和失败原因
-    return (34 downTo 0).map { daysAgo ->
+    // 造 95 天的数据：跨四个月，用来检查月份切换与更长的余额走势
+    return (94 downTo 0).map { daysAgo ->
         when {
             missed && daysAgo <= 2 -> failed(daysAgo)
             daysAgo == 0 -> done(0)
-            daysAgo == 9 || daysAgo == 23 -> failed(daysAgo)
+            daysAgo == 9 || daysAgo == 23 || daysAgo == 57 || daysAgo == 78 -> failed(daysAgo)
             daysAgo % 7 == 3 -> skipped(daysAgo)
             else -> done(daysAgo)
         }
@@ -234,6 +246,18 @@ private fun App(
 ) {
     val context = LocalContext.current
     var config by remember { mutableStateOf(store.load()) }
+    // 通知上的「重新登录」：清掉失效凭据落到登录页，定时与外观保留
+    val openLogin = remember(resumeTick) {
+        (context as? ComponentActivity)?.intent?.getBooleanExtra(MainActivity.EXTRA_OPEN_LOGIN, false) == true
+    }
+    LaunchedEffect(openLogin) {
+        if (openLogin) {
+            store.clearCredentials()
+            store.clearSessionExpired()
+            config = null
+            (context as? ComponentActivity)?.intent?.removeExtra(MainActivity.EXTRA_OPEN_LOGIN)
+        }
+    }
     // 设计走查用：debug 包可通过 `am start --ez preview_login true` 直接看登录页，不写任何会话。
     val previewLogin = remember {
         val activity = context as? ComponentActivity

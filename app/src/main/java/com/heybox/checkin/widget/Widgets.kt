@@ -9,6 +9,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.heybox.checkin.R
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.signStreak
 import com.heybox.checkin.ui.MainActivity
 import com.heybox.checkin.work.CheckInService
 import org.json.JSONObject
@@ -69,6 +70,7 @@ object Widgets {
             now = System.currentTimeMillis(),
             loginRequired = !hasLogin || expired,
             enabledShares = enabledShares,
+            streak = signStreak(SessionStore(context).history()),
         )
     }
 

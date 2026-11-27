@@ -25,6 +25,7 @@ internal fun describeWidget(
     now: Long,
     loginRequired: Boolean,
     enabledShares: Set<String> = emptySet(),
+    streak: Int = 0,
 ): WidgetData {
     if (loginRequired) {
         return WidgetData(
@@ -73,7 +74,9 @@ internal fun describeWidget(
         nextAt <= 0L -> "尚未排定"
         else -> "下次 ${shortTime(nextAt, now)}"
     }
-    return WidgetData(line = "$status · $schedule", badge = badge, delta = delta, next = next)
+    // 4×1 只有一行：连续天数比「已签到」更值得看，但只在有两天以上时替换
+    val first = if (signed && streak >= 2) "连续 $streak 天" else status
+    return WidgetData(line = "$first · $schedule", badge = badge, delta = delta, next = next)
 }
 
 internal fun isSameDay(ms: Long, now: Long): Boolean {

@@ -247,6 +247,18 @@ class SessionStore(context: Context) {
 
     fun resetRetry() = prefs.edit().putInt(KEY_RETRY_COUNT, 0).apply()
 
+    /**
+     * 当晚最后一次补签的预算：窗口结束后才允许用，一天一次。
+     * 和 [takeRetry] 分开，是因为它专门给「网络恢复了，但常规重试已经用完」这种情况。
+     */
+    fun takeLateRetry(): Boolean {
+        val today = todayKey()
+        val used = if (prefs.getInt(KEY_LATE_RETRY_DAY, 0) == today) prefs.getInt(KEY_LATE_RETRY_COUNT, 0) else 0
+        if (used >= 1) return false
+        prefs.edit().putInt(KEY_LATE_RETRY_DAY, today).putInt(KEY_LATE_RETRY_COUNT, 1).apply()
+        return true
+    }
+
     private fun todayKey(): Int {
         val calendar = java.util.Calendar.getInstance()
         return calendar.get(java.util.Calendar.YEAR) * 10000 +
@@ -311,6 +323,8 @@ class SessionStore(context: Context) {
         private const val KEY_LAST_RUN_DAY = "last_run_day"
         private const val KEY_RETRY_DAY = "retry_day"
         private const val KEY_RETRY_COUNT = "retry_count"
+        private const val KEY_LATE_RETRY_DAY = "late_retry_day"
+        private const val KEY_LATE_RETRY_COUNT = "late_retry_count"
         private const val KEY_APPEARANCE = "appearance"
         private const val KEY_HIDE_RECENT = "hide_recent"
         private const val KEY_NOTICE_VERSION = "notice_version"
@@ -322,8 +336,8 @@ class SessionStore(context: Context) {
 
         const val MAX_RETRIES = 2
 
-        /** 历史保留天数。一天一条 JSON，30 天也就几十 KB。 */
-        const val HISTORY_DAYS = 30
+        /** 历史保留天数。一天一条 JSON，90 天也就几十 KB；连续签到与月度回顾都需要更长的窗口。 */
+        const val HISTORY_DAYS = 90
         const val DEFAULT_START_HOUR = 8
         const val DEFAULT_END_HOUR = 20
 

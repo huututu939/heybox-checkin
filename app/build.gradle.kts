@@ -13,8 +13,8 @@ android {
         applicationId = "com.heybox.checkin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.7.0"
+        versionCode = 26
+        versionName = "1.8.0"
     }
 
     // 发布签名：keystore.properties 不进仓库，换机器时把 keystore 与属性文件一起带走，

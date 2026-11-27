@@ -1,5 +1,7 @@
 package com.heybox.checkin
 
+import com.heybox.checkin.data.FailureKind
+import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.work.Scheduler
 import com.heybox.checkin.work.Watchdog
 import java.util.Calendar
@@ -90,5 +92,62 @@ class WatchdogTest {
     fun `窗口已过点时截止检查顺延到明天`() {
         val now = at(2026, 11, 27, 21)
         assertEquals(at(2026, 11, 28, 20, 10), Scheduler.deadlineMillis(now, 8, 20))
+    }
+
+    private fun failed(millis: Long, kind: FailureKind) =
+        RunRecord.failure(millis, "测试失败", kind)
+
+    private fun late(record: RunRecord?, now: Long, network: Boolean = true) = Watchdog.shouldLateRetry(
+        now = now,
+        record = record,
+        windowEnd = at(2026, 11, 27, 20),
+        hasNetwork = network,
+    )
+
+    @Test
+    fun `窗口结束后网络类失败可以再补一次`() {
+        val now = at(2026, 11, 27, 20, 30)
+        assertTrue(late(failed(at(2026, 11, 27, 14), FailureKind.NETWORK), now))
+    }
+
+    @Test
+    fun `窗口还没结束时不越过重试预算`() {
+        val now = at(2026, 11, 27, 18)
+        assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.NETWORK), now))
+    }
+
+    @Test
+    fun `没有网络时不当晚补签`() {
+        val now = at(2026, 11, 27, 20, 30)
+        assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.NETWORK), now, network = false))
+    }
+
+    @Test
+    fun `登录和验证码失败不再补`() {
+        val now = at(2026, 11, 27, 20, 30)
+        assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.SESSION), now))
+        assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.CAPTCHA), now))
+        assertFalse(late(failed(at(2026, 11, 27, 14), FailureKind.RATE_LIMIT), now))
+    }
+
+    @Test
+    fun `今天已签到就不补`() {
+        val now = at(2026, 11, 27, 20, 30)
+        val done = failed(at(2026, 11, 27, 14), FailureKind.NETWORK).copy(signed = true)
+        assertFalse(late(done, now))
+        // 「其它入口已完成」同理：没有执行，也不该再签
+        assertFalse(late(done.copy(signed = false, executed = false), now))
+    }
+
+    @Test
+    fun `昨天的失败不会拖到今天补`() {
+        val now = at(2026, 11, 27, 20, 30)
+        assertFalse(late(failed(at(2026, 11, 26, 14), FailureKind.NETWORK), now))
+    }
+
+    @Test
+    fun `没有记录时走正常补签分支`() {
+        val now = at(2026, 11, 27, 20, 30)
+        assertFalse(late(null, now))
     }
 }

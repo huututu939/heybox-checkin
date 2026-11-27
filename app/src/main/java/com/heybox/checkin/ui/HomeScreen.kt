@@ -105,6 +105,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.FailureKind
+import com.heybox.checkin.data.CheckItem
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SettingsExport
 import com.heybox.checkin.data.SharedSettings
@@ -112,6 +113,8 @@ import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.data.missStreak
+import com.heybox.checkin.data.runSelfCheck
+import com.heybox.checkin.data.selfCheckText
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
@@ -1029,6 +1032,7 @@ private fun SettingsTab(
     var askLogout by remember { mutableStateOf(false) }
     var exportText by remember { mutableStateOf<String?>(null) }
     var importOpen by remember { mutableStateOf(false) }
+    var selfCheckOpen by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1094,6 +1098,8 @@ private fun SettingsTab(
             PermissionRow("忽略电池优化", permissions.battery, PermGlyph.Battery, onClick = { onFix("battery") })
             PermissionRow("精确闹钟", permissions.exactAlarm, PermGlyph.Alarm, onClick = { onFix("alarm") })
             PermissionRow("自启动 / 后台运行", null, PermGlyph.Power, onClick = onAutostart)
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            ChevronRow("运行自检", RowGlyph.Check, onClick = { selfCheckOpen = true })
         }
 
         Spacer(Modifier.height(10.dp))
@@ -1137,6 +1143,10 @@ private fun SettingsTab(
         GroupLabel("其他")
         Card {
             ChevronRow("关于盒签", RowGlyph.Info, onClick = onAbout)
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            ChevronRow("导出签到记录", RowGlyph.Table, onClick = {
+                shareHistoryCsv(context, store.history())
+            })
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
             ChevronRow("导出配置", RowGlyph.Export, onClick = {
                 exportText = SettingsExport.encode(SettingsExport.read(store))
@@ -1224,6 +1234,66 @@ private fun SettingsTab(
                 )
             }
         }
+    }
+
+    if (selfCheckOpen) {
+        SelfCheckDialog(context, onClose = { selfCheckOpen = false })
+    }
+}
+
+/** 设置页的「运行自检」：把「某天没跑」可能的原因一次查完，结果可复制给维护者。 */
+@Composable
+private fun SelfCheckDialog(context: Context, onClose: () -> Unit) {
+    var items by remember { mutableStateOf<List<CheckItem>?>(null) }
+    LaunchedEffect(Unit) { items = runSelfCheck(context) }
+
+    GlassDialog(onDismissRequest = onClose) {
+        DialogTitle("运行自检")
+        Spacer(Modifier.height(10.dp))
+        val current = items
+        if (current == null) {
+            DialogBody("正在检查权限、闹钟与网络…")
+        } else {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                current.forEach { item ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            if (item.ok) "✓" else "✕",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (item.ok) Ink.success else Ink.error,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.width(22.dp),
+                        )
+                        Column {
+                            Text(item.label, style = MaterialTheme.typography.bodyMedium, color = Ink.ink)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                item.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Ink.muted,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        DialogActions(
+            primary = "复制结果",
+            onPrimary = {
+                items?.let { copyText(context, "盒签自检", selfCheckText(it)) }
+                onClose()
+            },
+            secondary = "关闭",
+            onSecondary = onClose,
+            primaryEnabled = items != null,
+        )
     }
 }
 
@@ -1315,7 +1385,7 @@ private fun PermissionRow(
 
 private enum class PermGlyph { Bell, Battery, Alarm, Power }
 
-private enum class RowGlyph { Info, Export, Import, Exit }
+private enum class RowGlyph { Info, Export, Import, Table, Check, Exit }
 
 @Composable
 private fun RowIcon(glyph: RowGlyph) {
@@ -1343,6 +1413,24 @@ private fun RowIcon(glyph: RowGlyph) {
                 drawLine(color, Offset(w * 0.36f, h * 0.58f), Offset(w * 0.5f, h * 0.72f), 1.5.dp.toPx(), StrokeCap.Round)
                 drawLine(color, Offset(w * 0.64f, h * 0.58f), Offset(w * 0.5f, h * 0.72f), 1.5.dp.toPx(), StrokeCap.Round)
                 drawLine(color, Offset(w * 0.24f, h * 0.86f), Offset(w * 0.76f, h * 0.86f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            RowGlyph.Table -> {
+                // 表格：外框 + 两条横线，和「导出配置」的箭头区分开
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(w * 0.18f, h * 0.24f),
+                    size = Size(w * 0.64f, h * 0.52f),
+                    cornerRadius = CornerRadius(w * 0.06f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(w * 0.18f, h * 0.42f), Offset(w * 0.82f, h * 0.42f), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.18f, h * 0.58f), Offset(w * 0.82f, h * 0.58f), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+
+            RowGlyph.Check -> {
+                drawLine(color, Offset(w * 0.22f, h * 0.52f), Offset(w * 0.42f, h * 0.7f), 1.8.dp.toPx(), StrokeCap.Round)
+                drawLine(color, Offset(w * 0.42f, h * 0.7f), Offset(w * 0.78f, h * 0.3f), 1.8.dp.toPx(), StrokeCap.Round)
             }
 
             RowGlyph.Exit -> {

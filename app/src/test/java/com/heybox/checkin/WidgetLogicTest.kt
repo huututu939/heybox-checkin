@@ -60,6 +60,36 @@ class WidgetLogicTest {
     }
 
     @Test
+    fun signedWithStreakShowsDaysInsteadOfStatus() {
+        val now = at(2026, 11, 24, 9, 0)
+        val next = at(2026, 11, 24, 14, 37)
+        val data = describeWidget(
+            record(now, signed = true),
+            scheduled = true,
+            nextAt = next,
+            now = now,
+            loginRequired = false,
+            streak = 9,
+        )
+        assertEquals("连续 9 天 · 下次 14:37", data.line)
+    }
+
+    @Test
+    fun singleDayStreakKeepsPlainStatus() {
+        val now = at(2026, 11, 24, 9, 0)
+        val next = at(2026, 11, 24, 14, 37)
+        val data = describeWidget(
+            record(now, signed = true),
+            scheduled = true,
+            nextAt = next,
+            now = now,
+            loginRequired = false,
+            streak = 1,
+        )
+        assertEquals("已签到 · 下次 14:37", data.line)
+    }
+
+    @Test
     fun nextTriggerTomorrowIncludesDate() {
         val now = at(2026, 11, 24, 20, 0)
         val next = at(2026, 11, 25, 8, 15)
