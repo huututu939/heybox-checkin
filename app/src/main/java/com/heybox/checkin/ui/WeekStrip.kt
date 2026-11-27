@@ -20,6 +20,8 @@ data class WeekCell(
     val executed: Boolean,
     val expDelta: Long?,
     val coinDelta: Long,
+    /** 当天的 H 币余额，月度走势用它算增量。 */
+    val coin: Long = 0L,
     val batteryDelta: Long?,
     /** 失败时的原因，只有 FAILED 那格会有。 */
     val error: String? = null,
@@ -57,6 +59,7 @@ internal fun weekCells(history: List<RunRecord>, now: Long, days: Int = 7): List
             executed = record?.executed == true,
             expDelta = record?.expDelta,
             coinDelta = record?.coinDelta ?: 0,
+            coin = record?.coin ?: 0L,
             batteryDelta = record?.batteryDelta,
             error = record?.error,
             errorKind = record?.errorKind,

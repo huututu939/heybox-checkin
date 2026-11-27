@@ -196,6 +196,21 @@ fun Modifier.glass(
 ): Modifier {
     val g = Glass.palette
     val backdrop = LocalBackdrop.current
+    val lens = if (backdrop != null) {
+        drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(blurRadius.toPx())
+                lens(lensRadius.toPx(), lensDepth.toPx())
+            },
+            highlight = { com.kyant.backdrop.highlight.Highlight.Default.copy(alpha = 0.85f) },
+            shadow = { com.kyant.backdrop.shadow.Shadow.Default },
+        )
+    } else {
+        Modifier
+    }
     return this
         .shadow(
             elevation = if (raised) 14.dp else 6.dp,
@@ -205,23 +220,7 @@ fun Modifier.glass(
             spotColor = g.shadow,
         )
         .clip(shape)
-        .then(
-            if (backdrop != null) {
-                drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { shape },
-                    effects = {
-                        vibrancy()
-                        blur(blurRadius.toPx())
-                        lens(lensRadius.toPx(), lensDepth.toPx())
-                    },
-                    highlight = { com.kyant.backdrop.highlight.Highlight.Default.copy(alpha = 0.85f) },
-                    shadow = { com.kyant.backdrop.shadow.Shadow.Default },
-                )
-            } else {
-                Modifier
-            },
-        )
+        .then(lens)
         .background(
             Brush.verticalGradient(
                 colors = listOf(

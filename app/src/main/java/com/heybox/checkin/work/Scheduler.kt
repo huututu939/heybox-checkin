@@ -16,8 +16,13 @@ import kotlin.random.Random
 object Scheduler {
 
     const val ACTION_RUN = "com.heybox.checkin.RUN_DAILY"
+    const val ACTION_DEADLINE = "com.heybox.checkin.DEADLINE_CHECK"
     private const val REQUEST_CODE = 1001
+    private const val REQUEST_CODE_DEADLINE = 1002
     private const val DAY_MS = 24L * 3600 * 1000
+
+    /** 窗口结束后再等 10 分钟：给当天最后一个随机点留出执行时间，再判定为漏签。 */
+    private const val DEADLINE_GRACE_MS = 10 * 60_000L
 
     /**
      * 关键规则：只在「今天窗口里还没过去的剩余时间」里随机，绝不因为随机点比当前时间早
@@ -83,12 +88,38 @@ object Scheduler {
         val ok = schedule(context, at)
         // 闹钟排不上（极少数 ROM 同时拒绝精确与兜底闹钟）时不要谎报「已排定」。
         store.setNextTrigger(if (ok) at else 0L)
+        armDeadline(context, now)
+        Watchdog.schedule(context)
         return if (ok) at else 0L
     }
 
-    fun schedule(context: Context, atMillis: Long): Boolean {
+    /**
+     * 窗口结束后 10 分钟的截止检查。每天按闹钟主路径跑完会重排，这里也一起重排；
+     * 真正的判定在 [Watchdog.catchUp]，已经跑过就什么都不做。
+     */
+    fun armDeadline(context: Context, now: Long = System.currentTimeMillis()): Long {
+        val store = SessionStore(context)
+        val at = deadlineMillis(now, store.windowStart(), store.windowEnd())
+        return if (scheduleAt(context, at, deadlinePendingIntent(context))) at else 0L
+    }
+
+    /** 截止检查的时刻：今天的窗口结束 + 宽限；已经过点就顺延到明天。 */
+    internal fun deadlineMillis(
+        now: Long,
+        startHour: Int,
+        endHour: Int,
+        graceMs: Long = DEADLINE_GRACE_MS,
+    ): Long {
+        var at = todayWindowEnd(now, startHour, endHour) + graceMs
+        if (at <= now) at += DAY_MS
+        return at
+    }
+
+    fun schedule(context: Context, atMillis: Long): Boolean =
+        scheduleAt(context, atMillis, pendingIntent(context))
+
+    private fun scheduleAt(context: Context, atMillis: Long, pending: PendingIntent): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = pendingIntent(context)
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
         return runCatching {
             if (exact) manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
@@ -109,12 +140,16 @@ object Scheduler {
     fun rearm(context: Context, atMillis: Long): Boolean {
         val ok = schedule(context, atMillis)
         SessionStore(context).setNextTrigger(if (ok) atMillis else 0L)
+        armDeadline(context)
+        Watchdog.schedule(context)
         return ok
     }
 
     fun cancel(context: Context) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         manager.cancel(pendingIntent(context))
+        manager.cancel(deadlinePendingIntent(context))
+        Watchdog.cancel(context)
         SessionStore(context).setNextTrigger(0)
     }
 
@@ -138,6 +173,13 @@ object Scheduler {
         context,
         REQUEST_CODE,
         Intent(context, CheckInReceiver::class.java).setAction(ACTION_RUN),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    private fun deadlinePendingIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        REQUEST_CODE_DEADLINE,
+        Intent(context, CheckInReceiver::class.java).setAction(ACTION_DEADLINE),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 }

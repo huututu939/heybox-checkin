@@ -38,6 +38,37 @@ fun missStreak(
 fun lastSignedAt(history: List<RunRecord>): Long? =
     history.filter { it.signed || !it.executed }.maxOfOrNull { it.at }
 
+/**
+ * 连续签到天数：从今天往回数，完成（含「其它入口已完成」）的连续天数。
+ *
+ * 今天还没记录不算断，从昨天开始数；失败或整天没记录即中断。
+ * 历史只留 [SessionStore.HISTORY_DAYS] 天，所以最多也只数到这里。
+ */
+fun signStreak(
+    history: List<RunRecord>,
+    now: Long = System.currentTimeMillis(),
+    maxDays: Int = SessionStore.HISTORY_DAYS,
+): Int {
+    if (history.isEmpty()) return 0
+    val firstDay = history.minOf { dayKey(it.at) }
+    var streak = 0
+    val base = Calendar.getInstance().apply { timeInMillis = now }
+    for (offset in 0..maxDays) {
+        val day = (base.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -offset) }
+        val millis = day.timeInMillis
+        if (dayKey(millis) < firstDay) break
+        val record = history.firstOrNull { dayKey(it.at) == dayKey(millis) }
+        val signed = record != null && (record.signed || !record.executed)
+        if (!signed) {
+            // 今天的随机时刻可能还没到，没记录不代表断
+            if (offset == 0 && record == null) continue
+            break
+        }
+        streak++
+    }
+    return streak
+}
+
 private fun dayKey(millis: Long): Int {
     val calendar = Calendar.getInstance().apply { timeInMillis = millis }
     return calendar.get(Calendar.YEAR) * 10000 +

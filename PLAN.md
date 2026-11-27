@@ -2,7 +2,7 @@
 
 目标：备用机（无 SIM 卡）安装一款安卓原生 App，每天在 08:00–20:00 之间随机挑一个时刻自动完成小黑盒签到；分享任务按开关执行，默认关闭。路线为 **A：协议层直调官方接口**。
 
-当前版本：**v1.6.2（versionCode 24）**，签名 release 由 CI 出包并发布。
+当前版本：**v1.7.0（versionCode 25）**，签名 release 由 CI 出包并发布。
 
 ## 已锁定决策
 
@@ -31,6 +31,19 @@
 | M6 实机验证 | 华为 JER-AN10 / Android 12 跑通登录与完整签到 | 完成 |
 | M7 发布打磨 | 签名 release、首启说明、关于页 / 许可、诊断、小组件、单色图标、Git | 完成 |
 | M8 可靠性闭环 | 失败分类、连续漏签提醒、记录页月历与余额走势、更新检查节流 | 完成 |
+| M9 值守自愈与回顾 | 截止闹钟 + JobScheduler 看门狗、连续签到与月度汇总、依赖与 CI 加固 | 完成 |
+
+## 本轮（v1.7.0）落地
+
+方向：闹钟被 ROM 清掉是唯一还没解决的静默失效（用户自己的 11/20–11/25 就是整天空档），这一版让「当天必跑」有两层兜底；记录页从「看得见断在哪天」再往前一步，给出连续天数与月度汇总。
+
+- 值守自愈 `work/Watchdog.kt` + `WatchdogJobService`：每天在窗口结束 10 分钟处落一个截止闹钟，当天没记录就补签；另有 4 小时周期任务（`setPersisted(true)`，跨重启），只负责重排丢失的闹钟。
+- 为什么周期任务不直接起服务：Android 12+ 的后台启动限制不豁免 JobScheduler，直接 `startForegroundService` 会抛 `ForegroundServiceStartNotAllowedException`；截止闹钟走的是精确闹钟广播，才有拉起前台服务的豁免。
+- 判定保守（`Watchdog.shouldCatchUp`）：今天已有记录（成功或失败）就不补——失败交给服务自己的重试预算，避免看门狗 4 小时一次把失败打成高频请求；今天的闹钟还没到点不抢跑；窗口开始前不打扰。
+- 补挂点：`Scheduler.scheduleNext` / `rearm` / `cancel` 统一带上看门狗与截止闹钟，`HeyboxApp` 每次进程启动幂等补一次（覆盖安装、清后台后 JobScheduler 可能丢）。
+- 记录页回顾 `ui/RecordStats.kt`：连续签到（`signStreak`，今天没记录不算断）、本月完成天数、分享成功率（`finish / 尝试`）；月历头显示 H 币月增量（月初月末余额差，只有一天余额时显示「—」）。
+- 工程：lint 清零（API 级别的系统栏属性交给 `enableEdgeToEdge`，`Modifier.then` 两处收成变量）；CI 增加 `lintDebug`、未签名 `assembleRelease`，发版 job 先跑单测；core / lifecycle / activity 升到当前稳定版。Compose BOM 暂留 2025.12（2026.11 起要求 compileSdk 37.1）。
+- R8 仍未打开：WebView JS 桥必须在真机回归登录，模拟器过不了短信验证码，留到有真机时单独做。
 
 ## 本轮（v1.6.0）落地
 

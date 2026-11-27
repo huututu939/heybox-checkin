@@ -13,8 +13,8 @@ android {
         applicationId = "com.heybox.checkin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.6.2"
+        versionCode = 25
+        versionName = "1.7.0"
     }
 
     // 发布签名：keystore.properties 不进仓库，换机器时把 keystore 与属性文件一起带走，
@@ -68,7 +68,8 @@ android {
     // 这里关掉发版前的 lint 检查（CI 仍然跑单测 + debug 构建）。
     lint {
         checkReleaseBuilds = false
-        abortOnError = false
+        // lintDebug 在 CI 里跑；有 Error 就失败，Warning 不影响出包
+        abortOnError = true
     }
 
     packaging {
@@ -77,9 +78,11 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.1")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    // Compose 2026.11 起要求 compileSdk 37.1；本机与 CI 只装了 37.0，
+    // 升 SDK 单独一步做，先把 BOM 留在 2025.12（Compose 1.12）。
     implementation(platform("androidx.compose:compose-bom:2025.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

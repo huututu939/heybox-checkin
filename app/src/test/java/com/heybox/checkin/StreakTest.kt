@@ -4,6 +4,7 @@ import com.heybox.checkin.data.FailureKind
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.lastSignedAt
 import com.heybox.checkin.data.missStreak
+import com.heybox.checkin.data.signStreak
 import java.util.Calendar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -94,5 +95,39 @@ class StreakTest {
         val ok = at(2026, 11, 22)
         val history = listOf(failed(at(2026, 11, 24)), done(ok), skipped(at(2026, 11, 21)))
         assertEquals(ok, lastSignedAt(history))
+    }
+
+    @Test
+    fun `连续签到从昨天开始数`() {
+        val now = at(2026, 11, 25, 7)
+        // 今天还没跑，24、23、22 三天都完成
+        val history = listOf(
+            done(at(2026, 11, 24)),
+            done(at(2026, 11, 23)),
+            skipped(at(2026, 11, 22)),
+        )
+        assertEquals(3, signStreak(history, now))
+    }
+
+    @Test
+    fun `今天失败会打断连续签到`() {
+        val now = at(2026, 11, 25, 14)
+        val history = listOf(failed(at(2026, 11, 25)), done(at(2026, 11, 24)))
+        assertEquals(0, signStreak(history, now))
+    }
+
+    @Test
+    fun `中间缺一天就从缺的那天停`() {
+        val now = at(2026, 11, 25, 7)
+        // 24 完成，23 没有记录，22 完成
+        val history = listOf(done(at(2026, 11, 24)), done(at(2026, 11, 22)))
+        assertEquals(1, signStreak(history, now))
+    }
+
+    @Test
+    fun `今天签到后计入连续天数`() {
+        val now = at(2026, 11, 25, 14)
+        val history = listOf(done(at(2026, 11, 25)), done(at(2026, 11, 24)))
+        assertEquals(2, signStreak(history, now))
     }
 }

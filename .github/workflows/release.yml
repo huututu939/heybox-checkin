@@ -28,6 +28,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # tag 不经过 main 的 CI，发版前自己跑一遍单测，别把坏包发出去
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       # 版本号与 tag 必须一致，避免 v1.4.1 的 tag 打出 1.4.0 的包
       - name: Check version matches tag
         run: |

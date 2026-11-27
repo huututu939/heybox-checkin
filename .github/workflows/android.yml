@@ -36,12 +36,26 @@ jobs:
       - name: Assemble debug
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Lint
+        run: ./gradlew lintDebug --stacktrace
+
+      - name: Assemble release (unsigned)
+        run: ./gradlew assembleRelease --stacktrace
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
 
       - name: Upload test report
         if: always()

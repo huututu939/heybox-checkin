@@ -25,6 +25,10 @@
             android:name=".work.CheckInService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".work.WatchdogJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver android:name=".work.BootReceiver" android:enabled="true" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

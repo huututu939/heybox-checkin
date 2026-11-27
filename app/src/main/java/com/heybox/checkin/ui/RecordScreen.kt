@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
+import com.heybox.checkin.data.signStreak
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberTiny
 import com.heybox.checkin.ui.theme.glass
@@ -66,6 +67,9 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     val doneAll = cells.count { it.state == DayState.DONE }
     val missedAll = cells.count { it.state == DayState.NONE || it.state == DayState.FAILED }
     val months = remember(history) { monthGrids(history, now, SessionStore.HISTORY_DAYS) }
+    val streak = remember(history) { signStreak(history, now) }
+    val share = remember(history) { shareSummary(history, now) }
+    val thisMonth = remember(months) { months.firstOrNull()?.let { monthSummary(it.days) } }
     // 默认选今天；今天还没记录就选最近一个有记录的日子
     var selected by remember(history) {
         mutableStateOf(cells.lastOrNull { it.state != DayState.NONE } ?: cells.lastOrNull())
@@ -97,7 +101,10 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
             color = Ink.muted,
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
+        RecapCard(streak = streak, month = thisMonth, share = share)
+
+        Spacer(Modifier.height(12.dp))
         Legend()
 
         BalanceTrend(history)
@@ -125,6 +132,81 @@ private fun Legend() {
     }
 }
 
+/**
+ * 顶部回顾：连续签到是用户最想知道的数，放在最显眼的位置；
+ * 本月完成和分享成功率用来回答「这个月到底怎么样」。
+ */
+@Composable
+private fun RecapCard(streak: Int, month: MonthSummary?, share: ShareSummary) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(24.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Stat(
+                label = "连续签到",
+                value = if (streak > 0) "$streak 天" else "—",
+                accent = streak > 0,
+            )
+            Stat(
+                label = "本月完成",
+                value = month?.let { "${it.done} 天" } ?: "—",
+                alignEnd = true,
+            )
+        }
+        if (share.attempts > 0) {
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = Ink.line, thickness = 1.dp)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "分享任务",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Ink.muted,
+                    fontSize = 10.5.sp,
+                    letterSpacing = 0.sp,
+                )
+                Text(
+                    "${share.finished}/${share.attempts} 成功",
+                    style = NumberTiny,
+                    color = if (share.finished == share.attempts) Ink.success else Ink.ink,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Stat(label: String, value: String, accent: Boolean = false, alignEnd: Boolean = false) {
+    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Ink.muted,
+            fontSize = 10.5.sp,
+            letterSpacing = 0.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            value,
+            style = NumberTiny,
+            color = if (accent) Ink.accent else Ink.ink,
+            fontSize = 18.sp,
+        )
+    }
+}
+
 @Composable
 private fun LegendItem(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -147,9 +229,7 @@ private fun LegendItem(color: Color, label: String) {
 
 @Composable
 private fun MonthCard(grid: MonthGrid, selected: WeekCell?, onSelect: (WeekCell) -> Unit) {
-    val done = grid.days.count { it.state == DayState.DONE }
-    val failed = grid.days.count { it.state == DayState.FAILED }
-    val skipped = grid.days.count { it.state == DayState.SKIPPED }
+    val summary = monthSummary(grid.days)
 
     Column(
         modifier = Modifier
@@ -157,29 +237,28 @@ private fun MonthCard(grid: MonthGrid, selected: WeekCell?, onSelect: (WeekCell)
             .glass(RoundedCornerShape(24.dp))
             .padding(horizontal = 14.dp, vertical = 16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                grid.label,
-                style = MaterialTheme.typography.titleMedium,
-                color = Ink.ink,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                buildString {
-                    append("完成 $done")
-                    if (skipped > 0) append(" · 跳过 $skipped")
-                    if (failed > 0) append(" · 失败 $failed")
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = Ink.muted,
-                fontSize = 10.5.sp,
-                letterSpacing = 0.sp,
-            )
-        }
+        Text(
+            grid.label,
+            style = MaterialTheme.typography.titleMedium,
+            color = Ink.ink,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            buildString {
+                append("完成 ${summary.done}")
+                if (summary.skipped > 0) append(" · 跳过 ${summary.skipped}")
+                if (summary.failed > 0) append(" · 失败 ${summary.failed}")
+                summary.coinDelta?.let {
+                    append(" · H 币 ")
+                    append(if (it >= 0) "+$it" else "$it")
+                }
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = Ink.muted,
+            fontSize = 10.5.sp,
+            letterSpacing = 0.sp,
+        )
 
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -249,19 +328,18 @@ private fun DayCell(
         DayState.FAILED -> Ink.error
         DayState.NONE -> Ink.muted.copy(alpha = 0.45f)
     }
+    val outline = if (selected) {
+        Modifier.border(1.5.dp, Ink.ink.copy(alpha = 0.42f), RoundedCornerShape(9.dp))
+    } else {
+        Modifier
+    }
     Column(
         modifier = modifier
             .heightIn(min = 34.dp)
             .padding(2.dp)
             .clip(RoundedCornerShape(9.dp))
             .background(fill)
-            .then(
-                if (selected) {
-                    Modifier.border(1.5.dp, Ink.ink.copy(alpha = 0.42f), RoundedCornerShape(9.dp))
-                } else {
-                    Modifier
-                },
-            )
+            .then(outline)
             .clickable(enabled = cell.state != DayState.NONE, onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

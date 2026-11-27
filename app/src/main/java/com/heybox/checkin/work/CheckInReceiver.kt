@@ -8,6 +8,12 @@ import com.heybox.checkin.data.SessionStore
 class CheckInReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // 截止检查：窗口结束还没跑就补一次（由精确闹钟触发，允许拉起前台服务）
+        if (intent.action == Scheduler.ACTION_DEADLINE) {
+            Watchdog.catchUp(context)
+            return
+        }
+
         val store = SessionStore(context)
         if (!store.scheduledEnabled()) return
         // 凭据被清掉（退出登录 / 重登中）时不要空跑一次再报失败；等重新登录后首页重排。

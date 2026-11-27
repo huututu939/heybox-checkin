@@ -7,9 +7,8 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:enforceStatusBarContrast">false</item>
-        <item name="android:enforceNavigationBarContrast">false</item>
+        <!-- 系统栏图标明暗与对比度由 MainActivity 的 enableEdgeToEdge() 在运行时设置，
+             API 29+ 才有的属性不写在 XML 里，免得 minSdk 26 触发 NewApi。 -->
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
