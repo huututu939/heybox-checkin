@@ -13,8 +13,8 @@ android {
         applicationId = "com.heybox.checkin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.8.0"
+        versionCode = 27
+        versionName = "1.8.1"
     }
 
     // 发布签名：keystore.properties 不进仓库，换机器时把 keystore 与属性文件一起带走，
@@ -37,10 +37,9 @@ android {
 
     buildTypes {
         release {
-            // 先用不混淆的 release：WebView 里的官方设备指纹 SDK 走 JS 桥，
-            // 混淆一旦漏 keep 就会在登录时才炸，没法在真机上悄悄回归。
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // R8 测试分支：真机回归通过前不要合并回 main
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystoreProps.getProperty("storeFile") != null) {
                 signingConfig = signingConfigs.getByName("release")
