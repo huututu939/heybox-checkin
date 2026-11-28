@@ -36,6 +36,12 @@
 | M11 工程加固 | 编排单测、HomeScreen 拆分、Dependabot、R8 回归清单 | 完成 |
 | M12 R8 上线 | 混淆 + 资源收缩，8.9 MB → 1.7 MB，真机回归通过 | 完成 |
 | M13 审查修复 | 补签门控、时区重排、月份选中、权限探测合并、CSV 可见性 | 完成 |
+| M14 图标与依赖 | 玻璃卡片图标替换、AGP 9.5.3 / Kotlin 2.4.21、Dependabot 首批 PR | 完成 |
+
+## 待随下一版发布
+
+- 应用图标换成玻璃卡片设计（三层自适应 + 实心单色剪影 + 全密度兜底，`ic_launcher_background` 由 color 改为 drawable 光晕矢量）。发版时更新日志加一条「优化」。
+- Compose BOM 升 2026.11.01 被 compileSdk 37.1 卡住（本机与 CI 只装 37.0），Dependabot PR #1 先挂着，升 SDK 时一起处理。
 
 ## 本轮（v1.8.2）审查修复
 
