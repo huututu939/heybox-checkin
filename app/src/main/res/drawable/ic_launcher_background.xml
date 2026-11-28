@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 图标背景：燕麦奶白打底 + 左下淡紫光晕 + 右上暖橙光晕（对应 App 浅色主题的渐变） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M0,0h108v108h-108z"
+        android:fillColor="#F7F2EC" />
+
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="6"
+                android:centerY="104"
+                android:gradientRadius="112"
+                android:startColor="#D1B9AED2"
+                android:endColor="#00B9AED2" />
+        </aapt:attr>
+    </path>
+
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="104"
+                android:centerY="4"
+                android:gradientRadius="102"
+                android:startColor="#E6EFA066"
+                android:endColor="#00EFA066" />
+        </aapt:attr>
+    </path>
+</vector>
