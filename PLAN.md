@@ -2,7 +2,7 @@
 
 目标：备用机（无 SIM 卡）安装一款安卓原生 App，每天在 08:00–20:00 之间随机挑一个时刻自动完成小黑盒签到；分享任务按开关执行，默认关闭。路线为 **A：协议层直调官方接口**。
 
-当前版本：**v1.8.2（versionCode 28）**，签名 release 由 CI 出包并发布。
+当前版本：**v1.9.0（versionCode 29）**，签名 release 由 CI 出包并发布。
 
 ## 已锁定决策
 
@@ -38,9 +38,14 @@
 | M13 审查修复 | 补签门控、时区重排、月份选中、权限探测合并、CSV 可见性 | 完成 |
 | M14 图标与依赖 | 玻璃卡片图标替换、AGP 9.5.3 / Kotlin 2.4.21、Dependabot 首批 PR | 完成 |
 
+## 本轮（v1.9.0）落地
+
+- 应用图标换成玻璃卡片设计（三层自适应 + 实心单色剪影 + 全密度兜底，`ic_launcher_background` 由 color 改为 drawable 光晕矢量）；模拟器确认应用列表渲染与启动正常，主题图标的染色要 Android 13+ 桌面，留给真机看。
+- Dependabot 首批 3 个 PR：AGP 9.3.2→9.5.3、Kotlin 2.4.10→2.4.21（本地构建 + 单测 + release 重验后合并）、org.json 测试依赖（合并）；Compose BOM 一个被 compileSdk 37.1 卡住未合。
+- AGP 变更连带换了 R8 版本，按 `docs/r8-checklist.md` 重跑 release 构建（1.79 MB，签名不变）。
+
 ## 待随下一版发布
 
-- 应用图标换成玻璃卡片设计（三层自适应 + 实心单色剪影 + 全密度兜底，`ic_launcher_background` 由 color 改为 drawable 光晕矢量）。发版时更新日志加一条「优化」。
 - Compose BOM 升 2026.11.01 被 compileSdk 37.1 卡住（本机与 CI 只装 37.0），Dependabot PR #1 先挂着，升 SDK 时一起处理。
 
 ## 本轮（v1.8.2）审查修复
