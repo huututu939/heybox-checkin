@@ -9,6 +9,7 @@ import java.util.Calendar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import com.heybox.checkin.data.nextMilestone
 
 class StreakTest {
 
@@ -129,5 +130,16 @@ class StreakTest {
         val now = at(2026, 11, 25, 14)
         val history = listOf(done(at(2026, 11, 25)), done(at(2026, 11, 24)))
         assertEquals(2, signStreak(history, now))
+    }
+
+    @Test
+    fun `里程碑按进度给出下一个目标`() {
+        assertEquals(7 to 7, nextMilestone(0))
+        assertEquals(7 to 1, nextMilestone(6))
+        assertEquals(30 to 23, nextMilestone(7))
+        assertEquals(90 to 60, nextMilestone(30))
+        assertEquals(180 to 90, nextMilestone(90))
+        assertNull(nextMilestone(365))
+        assertNull(nextMilestone(400))
     }
 }

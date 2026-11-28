@@ -11,6 +11,7 @@ import com.heybox.checkin.core.TaskRunner
 import com.heybox.checkin.widget.Widgets
 import com.heybox.checkin.data.Failure
 import com.heybox.checkin.data.FailureKind
+import com.heybox.checkin.data.HistoryBackup
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.data.classifyFailure
@@ -170,14 +171,19 @@ class CheckInService : Service() {
     ) {
         // 必须在 recordFailure 之后算，否则今天这次还没落库，连续天数会少一天
         val streak = if (success) 0 else missStreak(store.history())
-        Notifications.result(
-            this,
-            success = success,
-            text = text,
-            hint = failure?.hint,
-            streak = streak,
-            kind = failure?.kind,
-        )
+        // 成功通知可关、夜间静音只压成功：失败与连续漏签始终要能叫到人
+        val postResult = !success ||
+            (store.successNotify() && !SessionStore.inQuietHours(System.currentTimeMillis()))
+        if (postResult) {
+            Notifications.result(
+                this,
+                success = success,
+                text = text,
+                hint = failure?.hint,
+                streak = streak,
+                kind = failure?.kind,
+            )
+        }
         when {
             success -> {
                 store.resetRetry()
@@ -192,6 +198,8 @@ class CheckInService : Service() {
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
         Widgets.refresh(this)
+        // 历史刚落库，顺手把自动备份刷一遍；失败也不能影响签到流程本身
+        HistoryBackup.write(this, store.history())
         stopSelf()
     }
 

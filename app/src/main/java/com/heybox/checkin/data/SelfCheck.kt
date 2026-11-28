@@ -14,6 +14,8 @@ data class CheckItem(
     val label: String,
     val ok: Boolean,
     val detail: String,
+    /** ROM 的自启动管理这类探测不到的项：不参与 ✓/✕，只给行动建议。 */
+    val verifiable: Boolean = true,
 )
 
 /**
@@ -96,6 +98,14 @@ suspend fun runSelfCheck(context: Context): List<CheckItem> = withContext(Dispat
         )
         val api = apiReachable()
         add(CheckItem(label = "接口连通", ok = api.first, detail = api.second))
+        add(
+            CheckItem(
+                label = "自启动 / 后台清理",
+                ok = true,
+                verifiable = false,
+                detail = "App 探测不到 ROM 的管理策略：系统启动管理里把盒签设为手动管理，允许自启动与后台活动；最近任务里锁定卡片",
+            ),
+        )
     }
 }
 
@@ -128,6 +138,11 @@ private fun apiReachable(): Pair<Boolean, String> = runCatching {
 fun selfCheckText(items: List<CheckItem>): String = buildString {
     appendLine("盒签自检")
     items.forEach { item ->
-        appendLine("${if (item.ok) "✓" else "✕"} ${item.label}：${item.detail}")
+        val mark = when {
+            !item.verifiable -> "·"
+            item.ok -> "✓"
+            else -> "✕"
+        }
+        appendLine("$mark ${item.label}：${item.detail}")
     }
 }

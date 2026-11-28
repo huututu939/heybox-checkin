@@ -77,13 +77,13 @@ class SessionStore(context: Context) {
     fun setLastResult(value: String) = prefs.edit().putString(KEY_LAST_RESULT, value).apply()
 
     fun saveRun(record: RunRecord) {
-        prefs.edit().putString(KEY_RUN_RECORD, record.toJson().toString()).apply()
+        prefs.edit().putString(KEY_RUN_RECORD, record.toJsonObject().toString()).apply()
         appendHistory(record)
     }
 
     fun loadRun(): RunRecord? = runCatching {
         val raw = prefs.getString(KEY_RUN_RECORD, null) ?: return null
-        recordFrom(org.json.JSONObject(raw))
+        runRecordFromJson(org.json.JSONObject(raw))
     }.getOrNull()
 
     /** 最近 N 天的记录，按时间倒序；同一天只保留最后一次写入。 */
@@ -91,7 +91,7 @@ class SessionStore(context: Context) {
         val raw = prefs.getString(KEY_RUN_HISTORY, null) ?: return emptyList()
         val array = org.json.JSONArray(raw)
         (0 until array.length()).mapNotNull { index ->
-            array.optJSONObject(index)?.let { recordFrom(it) }
+            array.optJSONObject(index)?.let { runRecordFromJson(it) }
         }
     }.getOrDefault(emptyList())
 
@@ -100,53 +100,20 @@ class SessionStore(context: Context) {
         val kept = history().filter { dayKey(it.at) != day }
         val list = (listOf(record) + kept).take(HISTORY_DAYS)
         val array = org.json.JSONArray()
-        list.forEach { array.put(it.toJson()) }
+        list.forEach { array.put(it.toJsonObject()) }
         prefs.edit().putString(KEY_RUN_HISTORY, array.toString()).apply()
     }
 
-    private fun RunRecord.toJson(): org.json.JSONObject {
-        val tasks = org.json.JSONObject()
-        for ((id, state) in taskStates) tasks.put(id, state)
-        return org.json.JSONObject().apply {
-            put("at", at)
-            put("executed", executed)
-            // 增量未知时不要写成 0：0 会被界面当成「这次确实没加经验」。
-            expDelta?.let { put("exp_delta", it) }
-            put("coin_delta", coinDelta)
-            error?.let { put("error", it) }
-            errorKind?.let { put("error_kind", it) }
-            batteryDelta?.let { put("battery_delta", it) }
-            put("exp", exp)
-            put("coin", coin)
-            battery?.let { put("battery", it) }
-            level?.let { put("level", it) }
-            maxExp?.let { put("max_exp", it) }
-            put("signed", signed)
-            put("tasks", tasks)
-        }
-    }
-
-    private fun recordFrom(json: org.json.JSONObject): RunRecord {
-        val tasksJson = json.optJSONObject("tasks")
-        val states = buildMap {
-            tasksJson?.keys()?.forEach { key -> put(key, tasksJson.optString(key)) }
-        }
-        return RunRecord(
-            at = json.optLong("at"),
-            executed = json.optBoolean("executed"),
-            expDelta = if (json.has("exp_delta")) json.optLong("exp_delta") else null,
-            coinDelta = json.optLong("coin_delta"),
-            batteryDelta = if (json.has("battery_delta")) json.optLong("battery_delta") else null,
-            exp = json.optLong("exp"),
-            coin = json.optLong("coin"),
-            battery = if (json.has("battery")) json.optLong("battery") else null,
-            level = if (json.has("level")) json.optLong("level") else null,
-            maxExp = if (json.has("max_exp")) json.optLong("max_exp") else null,
-            signed = json.optBoolean("signed"),
-            taskStates = states,
-            error = json.optString("error").takeIf { it.isNotEmpty() },
-            errorKind = json.optString("error_kind").takeIf { it.isNotEmpty() },
-        )
+    /** 备份恢复：同一天以备份为准，其余保留。返回合并后的天数。 */
+    fun mergeHistory(records: List<RunRecord>): Int {
+        if (records.isEmpty()) return 0
+        val byDay = history().associateBy { dayKey(it.at) }.toMutableMap()
+        records.forEach { byDay[dayKey(it.at)] = it }
+        val merged = byDay.values.sortedByDescending { it.at }.take(HISTORY_DAYS)
+        val array = org.json.JSONArray()
+        merged.forEach { array.put(it.toJsonObject()) }
+        prefs.edit().putString(KEY_RUN_HISTORY, array.toString()).apply()
+        return merged.size
     }
 
     private fun dayKey(millis: Long): Int {
@@ -214,6 +181,16 @@ class SessionStore(context: Context) {
         .putInt(KEY_WINDOW_START, startHour)
         .putInt(KEY_WINDOW_END, endHour)
         .apply()
+
+    /** 签到成功后是否发通知；失败与连续漏签提醒不受这个开关影响。 */
+    fun successNotify(): Boolean = prefs.getBoolean(KEY_SUCCESS_NOTIFY, true)
+
+    fun setSuccessNotify(enabled: Boolean) = prefs.edit().putBoolean(KEY_SUCCESS_NOTIFY, enabled).apply()
+
+    /** 夜间静音（[QUIET_START_HOUR] 点到次日 [QUIET_END_HOUR] 点）：成功通知不弹，失败照常。 */
+    fun nightQuiet(): Boolean = prefs.getBoolean(KEY_NIGHT_QUIET, false)
+
+    fun setNightQuiet(enabled: Boolean) = prefs.edit().putBoolean(KEY_NIGHT_QUIET, enabled).apply()
 
     /**
      * 分享任务开关。签到始终执行，三个分享任务默认关闭：
@@ -316,6 +293,8 @@ class SessionStore(context: Context) {
         internal const val KEY_SCHEDULED = "scheduled"
         private const val KEY_WINDOW_START = "window_start"
         private const val KEY_WINDOW_END = "window_end"
+        private const val KEY_SUCCESS_NOTIFY = "success_notify"
+        private const val KEY_NIGHT_QUIET = "night_quiet"
         internal const val KEY_NEXT_TRIGGER = "next_trigger"
         private const val KEY_LAST_RUN_DAY = "last_run_day"
         private const val KEY_RETRY_DAY = "retry_day"
@@ -333,10 +312,21 @@ class SessionStore(context: Context) {
 
         const val MAX_RETRIES = 2
 
-        /** 历史保留天数。一天一条 JSON，90 天也就几十 KB；连续签到与月度回顾都需要更长的窗口。 */
-        const val HISTORY_DAYS = 90
+        /** 历史保留天数。一天一条 JSON，一年也就一百多 KB；年度回顾靠它撑住。 */
+        const val HISTORY_DAYS = 365
         const val DEFAULT_START_HOUR = 8
         const val DEFAULT_END_HOUR = 20
+
+        /** 夜间静音窗口：22 点到次日 8 点。 */
+        const val QUIET_START_HOUR = 22
+        const val QUIET_END_HOUR = 8
+
+        /** 静音窗口判定，纯函数方便单测。 */
+        fun inQuietHours(nowMillis: Long): Boolean {
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
+            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+            return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR
+        }
 
         val SHARE_TASK_IDS = listOf("1", "19", "31")
 

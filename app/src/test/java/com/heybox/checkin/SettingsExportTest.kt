@@ -50,4 +50,26 @@ class SettingsExportTest {
         assertEquals(20, config.endHour)
         assertEquals("auto", config.appearance)
     }
+
+    @Test
+    fun `通知偏好在配置里往返`() {
+        val config = SharedSettings(
+            scheduled = true,
+            startHour = 8,
+            endHour = 20,
+            shares = emptySet(),
+            hideFromRecents = false,
+            appearance = "auto",
+            successNotify = false,
+            nightQuiet = true,
+        )
+        assertEquals(config, SettingsExport.decode(SettingsExport.encode(config)))
+    }
+
+    @Test
+    fun `旧配置文本缺通知行时按默认值`() {
+        val config = SettingsExport.decode("盒签配置 v1\ndaily=on")!!
+        assertTrue(config.successNotify)
+        assertTrue(!config.nightQuiet)
+    }
 }

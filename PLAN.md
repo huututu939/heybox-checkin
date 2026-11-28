@@ -2,7 +2,7 @@
 
 目标：备用机（无 SIM 卡）安装一款安卓原生 App，每天在 08:00–20:00 之间随机挑一个时刻自动完成小黑盒签到；分享任务按开关执行，默认关闭。路线为 **A：协议层直调官方接口**。
 
-当前版本：**v1.9.0（versionCode 29）**，签名 release 由 CI 出包并发布。
+当前版本：**v1.10.0（versionCode 30）**，签名 release 由 CI 出包并发布。
 
 ## 已锁定决策
 
@@ -37,16 +37,25 @@
 | M12 R8 上线 | 混淆 + 资源收缩，8.9 MB → 1.7 MB，真机回归通过 | 完成 |
 | M13 审查修复 | 补签门控、时区重排、月份选中、权限探测合并、CSV 可见性 | 完成 |
 | M14 图标与依赖 | 玻璃卡片图标替换、AGP 9.5.3 / Kotlin 2.4.21、Dependabot 首批 PR | 完成 |
+| M15 年度回顾与通知设置 | 365 天历史、漏签原因分布、里程碑、JSON 备份、通知开关、compileSdk 37.1 | 完成 |
+
+## 本轮（v1.10.0）落地
+
+- 历史 90 → 365 天：月份胶囊切十三个月，连续签到/漏签统计/余额走势全部覆盖一年；记录页的 cells 加了 remember 避免每次重组重算 365 格。
+- 漏签原因分布 `RecordStats.missBreakdown`：月份副标题在「失败 N」后给出分类明细，整天没记录的空档以「没跑」单独计数（App 装上之前的天数与今天不计）。
+- 连签里程碑 `nextMilestone`：7 / 30 / 90 / 180 / 365，回顾卡在连续天数下给一句「还差几天」。
+- JSON 备份：`historyJson` / `recordsFromJson`（字段映射从 SessionStore 收进 HistoryExport 共用），设置页新增「导出备份 / 导入备份」；`HistoryBackup` 每次执行后自动覆盖写 Documents/盒签/盒签备份.json（MediaStore 免权限，Q 以下退应用专属目录）；恢复语义是「同一天以备份为准」。
+- 通知设置：成功通知开关 + 夜间静音（22:00–次日 8:00，只压成功通知），`SessionStore.inQuietHours` 纯函数可单测；两个偏好进配置导出（旧文本缺行退默认值，格式仍兼容 v1）。
+- 自检补「自启动 / 后台清理」条目：`CheckItem` 加 `verifiable`，ROM 探测不到的项用「!」显示、只给行动建议，自检文本以「·」标记。
+- 工程收尾：SettingsScreen 拆出 `SettingsWidgets.kt`（行组件/图标/自检与权限对话框），五个 UI 文件的 import 全部清到实际使用；`AutoPlan` 收拢 `(scheduled, nextAt, startHour, endHour)` 数据团；`CheckInService` 通知后顺手刷备份。
+- 平台跟进：compileSdk 37 + `compileSdkMinor = 1`（AGP 9 的 minor DSL）、BOM 2026.11.01（Compose 1.13，解掉 Dependabot PR #1）、targetSdk 36；R8 release 重验通过。
+- 上一轮遗留：v1.9.0 的图标与依赖已随 v1.9.0 发布，单色剪影主题图标的染色仍待 Android 13+ 真机确认。
 
 ## 本轮（v1.9.0）落地
 
 - 应用图标换成玻璃卡片设计（三层自适应 + 实心单色剪影 + 全密度兜底，`ic_launcher_background` 由 color 改为 drawable 光晕矢量）；模拟器确认应用列表渲染与启动正常，主题图标的染色要 Android 13+ 桌面，留给真机看。
-- Dependabot 首批 3 个 PR：AGP 9.3.2→9.5.3、Kotlin 2.4.10→2.4.21（本地构建 + 单测 + release 重验后合并）、org.json 测试依赖（合并）；Compose BOM 一个被 compileSdk 37.1 卡住未合。
+- Dependabot 首批 3 个 PR：AGP 9.3.2→9.5.3、Kotlin 2.4.10→2.4.21（本地构建 + 单测 + release 重验后合并）、org.json 测试依赖（合并）。
 - AGP 变更连带换了 R8 版本，按 `docs/r8-checklist.md` 重跑 release 构建（1.79 MB，签名不变）。
-
-## 待随下一版发布
-
-- Compose BOM 升 2026.11.01 被 compileSdk 37.1 卡住（本机与 CI 只装 37.0），Dependabot PR #1 先挂着，升 SDK 时一起处理。
 
 ## 本轮（v1.8.2）审查修复
 

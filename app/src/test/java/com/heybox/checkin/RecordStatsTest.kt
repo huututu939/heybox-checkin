@@ -4,6 +4,7 @@ import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.ui.DayState
 import com.heybox.checkin.ui.WeekCell
 import com.heybox.checkin.ui.defaultDay
+import com.heybox.checkin.ui.missBreakdown
 import com.heybox.checkin.ui.monthSummary
 import com.heybox.checkin.ui.shareSummary
 import java.util.Calendar
@@ -19,18 +20,27 @@ class RecordStatsTest {
             set(year, month - 1, day, hour, 10)
         }.timeInMillis
 
-    private fun cell(state: DayState, coin: Long = 0, day: Int = 1, month: Int = 11) = WeekCell(
+    private fun cell(
+        state: DayState,
+        coin: Long = 0,
+        day: Int = 1,
+        month: Int = 11,
+        errorKind: String? = null,
+        today: Boolean = false,
+    ) = WeekCell(
         monthDay = "$month/$day",
         monthLabel = "${month}月",
         weekday = "一",
         state = state,
-        today = false,
+        today = today,
         time = null,
         executed = state == DayState.DONE || state == DayState.FAILED,
         expDelta = null,
         coinDelta = 0,
         coin = coin,
         batteryDelta = null,
+        error = null,
+        errorKind = errorKind,
         year = 2026,
         month = month,
         day = day,
@@ -142,5 +152,47 @@ class RecordStatsTest {
         // 历史保留 90 天，这里取 100 天前
         val history = listOf(record(now - 100 * 86_400_000L, mapOf("1" to "finish")))
         assertEquals(0, shareSummary(history, now).attempts)
+    }
+
+    @Test
+    fun `漏签原因按分类归并`() {
+        val history = listOf(record(at(2026, 11, 5), mapOf("sign" to "finish")))
+        val cells = listOf(
+            cell(DayState.DONE, day = 5),
+            cell(DayState.FAILED, day = 6, errorKind = "network"),
+            cell(DayState.FAILED, day = 7, errorKind = "network"),
+            cell(DayState.FAILED, day = 8, errorKind = "server"),
+            cell(DayState.NONE, day = 9),
+            cell(DayState.NONE, day = 10),
+            cell(DayState.NONE, day = 11, today = true),
+        )
+        val miss = missBreakdown(history, cells)
+        assertEquals(3, miss.size)
+        assertEquals("没跑", miss[0].label)
+        assertEquals(2, miss[0].count)
+        // 数量并列时按名称码点排序：没跑 < 网络
+        assertEquals("网络", miss[1].label)
+        assertEquals(2, miss[1].count)
+        assertEquals("服务", miss[2].label)
+        assertEquals(1, miss[2].count)
+    }
+
+    @Test
+    fun `装上之前的日子不算没跑`() {
+        val history = listOf(record(at(2026, 11, 10), mapOf("sign" to "finish")))
+        val cells = listOf(
+            cell(DayState.NONE, day = 8),
+            cell(DayState.NONE, day = 11),
+            cell(DayState.NONE, day = 12, today = true),
+        )
+        val miss = missBreakdown(history, cells)
+        assertEquals(1, miss.size)
+        assertEquals("没跑", miss[0].label)
+        assertEquals(1, miss[0].count)
+    }
+
+    @Test
+    fun `没有历史时漏签分布为空`() {
+        assertEquals(0, missBreakdown(emptyList(), listOf(cell(DayState.FAILED, day = 3))).size)
     }
 }

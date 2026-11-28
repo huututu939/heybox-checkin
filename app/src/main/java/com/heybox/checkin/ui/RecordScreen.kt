@@ -28,10 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +49,11 @@ import com.heybox.checkin.data.signStreak
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberTiny
 import com.heybox.checkin.ui.theme.glass
+import com.heybox.checkin.data.nextMilestone
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+
+
 
 private val WeekdayHeader = listOf("一", "二", "三", "四", "五", "六", "日")
 
@@ -64,18 +67,20 @@ private val WeekdayHeader = listOf("一", "二", "三", "四", "五", "六", "�
 fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     BackHandler { onBack() }
     val now = System.currentTimeMillis()
-    val cells = weekCells(history, now, SessionStore.HISTORY_DAYS)
+    // 365 格带日期格式化，包一层 remember 避免每次重组都重算
+    val cells = remember(history) { weekCells(history, now, SessionStore.HISTORY_DAYS) }
     val doneAll = cells.count { it.state == DayState.DONE }
     val missedAll = cells.count { it.state == DayState.NONE || it.state == DayState.FAILED }
     val months = remember(history) { monthGrids(history, now, SessionStore.HISTORY_DAYS) }
     val streak = remember(history) { signStreak(history, now) }
     val share = remember(history) { shareSummary(history, now) }
+    val milestone = remember(streak) { nextMilestone(streak) }
     val thisMonth = remember(months) { months.firstOrNull()?.let { monthSummary(it.days) } }
     // 默认选当前月份；今天还没记录就选本月最近一个有记录的日子，保证选中态落在可见日历里
     val newestMonth = months.firstOrNull()
     val newestKey = newestMonth?.monthKey
     var selected by remember(history) { mutableStateOf(defaultDay(cells, newestKey)) }
-    // 90 天会有四个月，一次只展示选中的那个月
+    // 一年有十三个月，一次只展示选中的那个月
     var selectedMonth by remember(months) { mutableStateOf(newestKey) }
     val grid = months.firstOrNull { it.monthKey == selectedMonth } ?: newestMonth
 
@@ -106,7 +111,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
         )
 
         Spacer(Modifier.height(12.dp))
-        RecapCard(streak = streak, month = thisMonth, share = share)
+        RecapCard(streak = streak, milestone = milestone, month = thisMonth, share = share)
 
         Spacer(Modifier.height(14.dp))
         MonthChips(
@@ -127,6 +132,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
             MonthCard(
                 grid = it,
                 selected = selected,
+                miss = remember(history, selectedMonth) { missBreakdown(history, it.days) },
                 onSelect = { day -> selected = day },
             )
         }
@@ -137,7 +143,7 @@ fun RecordScreen(history: List<RunRecord>, onBack: () -> Unit) {
     }
 }
 
-/** 月份切换：90 天有四个月，横向一排比纵向堆四张卡片更好扫。 */
+/** 月份切换：一年有十三个月，横向一排比纵向堆十三张卡片更好扫。 */
 @Composable
 private fun MonthChips(
     months: List<MonthGrid>,
@@ -181,10 +187,15 @@ private fun Legend() {
 
 /**
  * 顶部回顾：连续签到是用户最想知道的数，放在最显眼的位置；
- * 本月完成和分享成功率用来回答「这个月到底怎么样」。
+ * 里程碑给一句「还差几天」，本月完成和分享成功率用来回答「这个月到底怎么样」。
  */
 @Composable
-private fun RecapCard(streak: Int, month: MonthSummary?, share: ShareSummary) {
+private fun RecapCard(
+    streak: Int,
+    milestone: Pair<Int, Int>?,
+    month: MonthSummary?,
+    share: ShareSummary,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -205,6 +216,16 @@ private fun RecapCard(streak: Int, month: MonthSummary?, share: ShareSummary) {
                 label = "本月完成",
                 value = month?.let { "${it.done} 天" } ?: "—",
                 alignEnd = true,
+            )
+        }
+        if (milestone != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "再连 ${milestone.second} 天，达成 ${milestone.first} 天里程碑",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ink.muted,
+                fontSize = 10.5.sp,
+                letterSpacing = 0.sp,
             )
         }
         if (share.attempts > 0) {
@@ -275,7 +296,12 @@ private fun LegendItem(color: Color, label: String) {
 }
 
 @Composable
-private fun MonthCard(grid: MonthGrid, selected: WeekCell?, onSelect: (WeekCell) -> Unit) {
+private fun MonthCard(
+    grid: MonthGrid,
+    selected: WeekCell?,
+    miss: List<MissReason>,
+    onSelect: (WeekCell) -> Unit,
+) {
     val summary = monthSummary(grid.days)
 
     Column(
@@ -295,7 +321,15 @@ private fun MonthCard(grid: MonthGrid, selected: WeekCell?, onSelect: (WeekCell)
             buildString {
                 append("完成 ${summary.done}")
                 if (summary.skipped > 0) append(" · 跳过 ${summary.skipped}")
-                if (summary.failed > 0) append(" · 失败 ${summary.failed}")
+                if (summary.failed > 0) {
+                    append(" · 失败 ${summary.failed}")
+                    val kinds = miss.filter { it.label != "没跑" }
+                    if (kinds.isNotEmpty()) {
+                        append(kinds.joinToString(" · ", prefix = "（", postfix = "）") { "${it.label} ${it.count}" })
+                    }
+                }
+                // 整天没跑的那几天：闹钟被清、后台被冻都不会留下失败记录，只有这里能看见
+                miss.firstOrNull { it.label == "没跑" }?.let { append(" · 没跑 ${it.count}") }
                 summary.coinDelta?.let {
                     append(" · H 币 ")
                     append(if (it >= 0) "+$it" else "$it")
@@ -346,7 +380,7 @@ private fun MonthCard(grid: MonthGrid, selected: WeekCell?, onSelect: (WeekCell)
         }
 
         val inThisMonth = selected != null && selected.year == grid.year && selected.month == grid.month
-        if (inThisMonth && selected != null) {
+        if (inThisMonth) {
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(color = Ink.line, thickness = 1.dp)
             Spacer(Modifier.height(10.dp))
@@ -457,7 +491,7 @@ internal fun detailText(cell: WeekCell): String = when (cell.state) {
 }
 
 /**
- * 30 天 H 币余额走势。
+ * 全部历史（一年）的 H 币余额走势。
  *
  * 用余额而不是「每日经验」：经验是等级内进度，升级会归零，画出来是锯齿；
  * 余额是单调的，断签一眼就能看出来。

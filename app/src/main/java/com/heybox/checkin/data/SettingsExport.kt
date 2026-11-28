@@ -13,6 +13,8 @@ data class SharedSettings(
     val shares: Set<String>,
     val hideFromRecents: Boolean,
     val appearance: String,
+    val successNotify: Boolean = true,
+    val nightQuiet: Boolean = false,
 )
 
 object SettingsExport {
@@ -28,6 +30,8 @@ object SettingsExport {
         shares = store.enabledShares(),
         hideFromRecents = store.hideFromRecents(),
         appearance = store.appearance(),
+        successNotify = store.successNotify(),
+        nightQuiet = store.nightQuiet(),
     )
 
     /** 纯文本、一行一项，方便微信里发给自己再从另一台机器粘贴。 */
@@ -37,6 +41,8 @@ object SettingsExport {
         appendLine("window=${"%02d:00".format(settings.startHour)}-${"%02d:00".format(settings.endHour)}")
         appendLine("shares=${settings.shares.sorted().joinToString(",")}")
         appendLine("hideRecent=${if (settings.hideFromRecents) "on" else "off"}")
+        appendLine("successNotify=${if (settings.successNotify) "on" else "off"}")
+        appendLine("nightQuiet=${if (settings.nightQuiet) "on" else "off"}")
         append("appearance=${settings.appearance}")
     }
 
@@ -65,6 +71,8 @@ object SettingsExport {
                 .toSet(),
             hideFromRecents = map["hideRecent"] == "on",
             appearance = map["appearance"]?.takeIf { it in APPEARANCES } ?: "auto",
+            successNotify = map["successNotify"] != "off",
+            nightQuiet = map["nightQuiet"] == "on",
         )
     }
 
@@ -73,6 +81,8 @@ object SettingsExport {
         store.setWindow(settings.startHour, settings.endHour)
         SHARE_IDS.forEach { id -> store.setShareTaskEnabled(id, id in settings.shares) }
         store.setHideFromRecents(settings.hideFromRecents)
+        store.setSuccessNotify(settings.successNotify)
+        store.setNightQuiet(settings.nightQuiet)
         store.setAppearance(settings.appearance)
     }
 }

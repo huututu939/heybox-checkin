@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.historyCsv
+import com.heybox.checkin.data.historyJson
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,3 +46,25 @@ private fun Context.hasSendTarget(type: String): Boolean =
         Intent(Intent.ACTION_SEND).setType(type),
         0,
     ).isNotEmpty()
+
+/** JSON 备份走同一套分享：收进微信/网盘，或者直接发到电脑上。 */
+internal fun shareHistoryJson(context: Context, history: List<RunRecord>) {
+    val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+    val name = "盒签备份-${SimpleDateFormat("yyyyMMdd", Locale.CHINA).format(Date())}.json"
+    val file = File(dir, name)
+    file.writeText(historyJson(history), Charsets.UTF_8)
+
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+    val type = if (context.hasSendTarget("application/json")) "application/json" else "text/plain"
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        this.type = type
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, "盒签签到记录备份")
+        clipData = ClipData.newRawUri("盒签签到记录备份", uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    val chooser = Intent.createChooser(intent, "导出备份").apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(chooser)
+}

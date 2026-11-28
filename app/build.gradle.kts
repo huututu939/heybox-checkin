@@ -8,13 +8,15 @@ plugins {
 android {
     namespace = "com.heybox.checkin"
     compileSdk = 37
+    // Compose 1.13（BOM 2026.11）要求 minor 发布 37.1；缺平台包时 AGP 会自己下载。
+    compileSdkMinor = 1
 
     defaultConfig {
         applicationId = "com.heybox.checkin"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 29
-        versionName = "1.9.0"
+        targetSdk = 36
+        versionCode = 30
+        versionName = "1.10.0"
     }
 
     // 发布签名：keystore.properties 不进仓库，换机器时把 keystore 与属性文件一起带走，
@@ -81,9 +83,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.1")
     implementation("androidx.activity:activity-compose:1.13.0")
-    // Compose 2026.11 起要求 compileSdk 37.1；本机与 CI 只装了 37.0，
-    // 升 SDK 单独一步做，先把 BOM 留在 2025.12（Compose 1.12）。
-    implementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.11.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")

@@ -8,143 +8,60 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.isSpecified
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.pointerInput
-import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.heybox.checkin.data.PermissionState
 import com.heybox.checkin.core.HeyboxConfig
 import com.heybox.checkin.BuildConfig
 import com.heybox.checkin.data.FailureKind
-import com.heybox.checkin.data.CheckItem
 import com.heybox.checkin.data.RunRecord
 import com.heybox.checkin.data.SettingsExport
-import com.heybox.checkin.data.SharedSettings
 import com.heybox.checkin.data.UpdateCheck
 import com.heybox.checkin.data.UpdateInfo
 import com.heybox.checkin.data.SessionStore
 import com.heybox.checkin.data.missStreak
-import com.heybox.checkin.data.runSelfCheck
-import com.heybox.checkin.data.selfCheckText
-import com.heybox.checkin.ui.theme.Ink
-import com.heybox.checkin.ui.theme.NumberSmall
-import com.heybox.checkin.ui.theme.NumberStyle
-import com.heybox.checkin.ui.theme.NumberTiny
-import com.heybox.checkin.ui.theme.Glass
-import com.heybox.checkin.ui.theme.glass
-import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.heybox.checkin.ui.theme.LocalBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
 import com.heybox.checkin.work.CheckInService
 import com.heybox.checkin.work.RunLock
 import com.heybox.checkin.work.RunState
 import com.heybox.checkin.work.Scheduler
 import com.heybox.checkin.widget.Widgets
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+
+
 
 internal enum class HomeTab { Today, Settings }
 
 internal data class Permissions(val notify: Boolean, val battery: Boolean, val exactAlarm: Boolean) {
     val readyCount: Int get() = listOf(notify, battery, exactAlarm).count { it }
 }
+
+/**
+ * 自动签到的四个相关值总是成对出现（排程开关、下次触发、窗口起止），
+ * 收成一份数据传递，避免页签函数一路挂八个散参数。
+ */
+internal data class AutoPlan(
+    val scheduled: Boolean,
+    val nextAt: Long,
+    val startHour: Int,
+    val endHour: Int,
+)
 
 internal const val SHARE_POST = "1"
 internal const val SHARE_GAME = "19"
@@ -179,12 +96,20 @@ fun HomeScreen(
     var showRecord by remember { mutableStateOf(false) }
     var startupHelp by remember { mutableStateOf(false) }
     var askHideRecent by remember { mutableStateOf(false) }
-    var scheduled by remember { mutableStateOf(previewHistory != null || store.scheduledEnabled()) }
-    var nextAt by remember { mutableStateOf(if (previewHistory != null) previewNextRun() else store.nextTrigger()) }
-    var startHour by remember { mutableStateOf(store.windowStart()) }
-    var endHour by remember { mutableStateOf(store.windowEnd()) }
+    var plan by remember {
+        mutableStateOf(
+            AutoPlan(
+                scheduled = previewHistory != null || store.scheduledEnabled(),
+                nextAt = if (previewHistory != null) previewNextRun() else store.nextTrigger(),
+                startHour = store.windowStart(),
+                endHour = store.windowEnd(),
+            ),
+        )
+    }
     var expired by remember { mutableStateOf(store.sessionExpired() || previewExpired) }
     var hideRecent by remember { mutableStateOf(store.hideFromRecents()) }
+    var successNotify by remember { mutableStateOf(store.successNotify()) }
+    var nightQuiet by remember { mutableStateOf(store.nightQuiet()) }
     var enabledShares by remember {
         mutableStateOf(
             if (previewHistory != null) setOf(SHARE_POST, SHARE_GAME, SHARE_REVIEW) else store.enabledShares(),
@@ -248,9 +173,9 @@ fun HomeScreen(
     val status = when {
         running -> TodayStatus.RUNNING
         error != null -> TodayStatus.INCOMPLETE
-        ranToday && todayRecord?.signed == true && shareDone -> TodayStatus.DONE
-        ranToday && todayRecord?.signed == true -> TodayStatus.SIGNED
-        ranToday && todayRecord?.error != null -> TodayStatus.FAILED
+        ranToday && todayRecord.signed == true && shareDone -> TodayStatus.DONE
+        ranToday && todayRecord.signed == true -> TodayStatus.SIGNED
+        ranToday && todayRecord.error != null -> TodayStatus.FAILED
         else -> TodayStatus.PENDING
     }
     val cells = weekCells(history, now)
@@ -266,9 +191,9 @@ fun HomeScreen(
         // 预览模式不碰真实状态：不重排闹钟、不覆盖假数据。
         if (previewHistory != null) return@LaunchedEffect
         permissions = readPermissions(context)
-        scheduled = store.scheduledEnabled()
+        val scheduledNow = store.scheduledEnabled()
         val stored = store.nextTrigger()
-        nextAt = if (scheduled) {
+        val nextAtNow = if (scheduledNow) {
             when {
                 // 正在执行的那次会自己排下一次，这里别抢。
                 RunLock.isBusy() || RunState.running.value -> stored
@@ -280,6 +205,7 @@ fun HomeScreen(
         } else {
             0L
         }
+        plan = AutoPlan(scheduledNow, nextAtNow, store.windowStart(), store.windowEnd())
         expired = store.sessionExpired()
         history = recentHistory(store)
         record = store.loadRun()
@@ -292,8 +218,12 @@ fun HomeScreen(
             sawRunning = true
             return@LaunchedEffect
         }
-        scheduled = store.scheduledEnabled()
-        nextAt = store.nextTrigger()
+        plan = plan.copy(
+            scheduled = store.scheduledEnabled(),
+            nextAt = store.nextTrigger(),
+            startHour = store.windowStart(),
+            endHour = store.windowEnd(),
+        )
         expired = store.sessionExpired()
         history = recentHistory(store)
         record = store.loadRun()
@@ -351,10 +281,7 @@ fun HomeScreen(
                 status = status,
                 running = running,
                 expired = expired,
-                scheduled = scheduled,
-                nextAt = nextAt,
-                startHour = startHour,
-                endHour = endHour,
+                plan = plan,
                 today = todayRecord,
                 cells = cells,
                 enabledShares = enabledShares,
@@ -376,28 +303,28 @@ fun HomeScreen(
             )
 
             HomeTab.Settings -> SettingsTab(
+                plan = plan,
                 permissions = permissions,
-                scheduled = scheduled,
-                nextAt = nextAt,
-                startHour = startHour,
-                endHour = endHour,
                 hideRecent = hideRecent,
                 appearance = appearance,
+                successNotify = successNotify,
+                nightQuiet = nightQuiet,
                 error = error,
                 scroll = settingsScroll,
                 onToggleScheduled = { enabled ->
-                    scheduled = enabled
                     store.setScheduled(enabled)
-                    nextAt = if (enabled) Scheduler.scheduleNext(context) else {
-                        Scheduler.cancel(context)
-                        0L
-                    }
+                    plan = plan.copy(
+                        scheduled = enabled,
+                        nextAt = if (enabled) Scheduler.scheduleNext(context) else 0L,
+                    )
                 },
                 onWindow = { newStart, newEnd ->
-                    startHour = newStart
-                    endHour = newEnd
                     store.setWindow(newStart, newEnd)
-                    if (scheduled) nextAt = Scheduler.scheduleNext(context)
+                    plan = plan.copy(
+                        startHour = newStart,
+                        endHour = newEnd,
+                        nextAt = if (plan.scheduled) Scheduler.scheduleNext(context) else plan.nextAt,
+                    )
                 },
                 onToggleHideRecent = { enabled ->
                     if (enabled) {
@@ -406,6 +333,14 @@ fun HomeScreen(
                         store.setHideFromRecents(false)
                         hideRecent = false
                     }
+                },
+                onSuccessNotify = { enabled ->
+                    store.setSuccessNotify(enabled)
+                    successNotify = enabled
+                },
+                onNightQuiet = { enabled ->
+                    store.setNightQuiet(enabled)
+                    nightQuiet = enabled
                 },
                 onFix = { target ->
                     when (target) {
@@ -421,18 +356,20 @@ fun HomeScreen(
                 store = store,
                 onImport = { cfg ->
                     SettingsExport.save(store, cfg)
-                    scheduled = cfg.scheduled
-                    startHour = cfg.startHour
-                    endHour = cfg.endHour
+                    successNotify = cfg.successNotify
+                    nightQuiet = cfg.nightQuiet
                     enabledShares = store.enabledShares()
                     hideRecent = cfg.hideFromRecents
                     onAppearanceChange(cfg.appearance)
-                    nextAt = if (cfg.scheduled) {
-                        Scheduler.scheduleNext(context)
-                    } else {
-                        Scheduler.cancel(context)
-                        0L
-                    }
+                    plan = plan.copy(
+                        scheduled = cfg.scheduled,
+                        startHour = cfg.startHour,
+                        endHour = cfg.endHour,
+                        nextAt = if (cfg.scheduled) Scheduler.scheduleNext(context) else 0L,
+                    )
+                },
+                onHistoryChanged = {
+                    history = recentHistory(store)
                 },
             )
         }
@@ -510,14 +447,6 @@ fun HomeScreen(
 
 /* ------------------------------------------------------------------ 今天 */
 
-@Composable
-internal fun switchColors() = SwitchDefaults.colors(
-    checkedThumbColor = Ink.onAccent,
-    checkedTrackColor = Ink.accent,
-    uncheckedThumbColor = Ink.muted,
-    uncheckedTrackColor = Ink.raised,
-    uncheckedBorderColor = Ink.line,
-)
 /** 历史为空时（旧版本只存了一份最近记录）退回用那一条补位，避免「最近七天」直接空着。 */
 private fun recentHistory(store: SessionStore): List<RunRecord> =
     store.history().ifEmpty { listOfNotNull(store.loadRun()) }

@@ -1,43 +1,11 @@
 package com.heybox.checkin.ui
 
-import android.app.AlarmManager
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.isSpecified
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.pointerInput
-import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -56,89 +23,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationManagerCompat
 import com.heybox.checkin.core.HeyboxConfig
-import com.heybox.checkin.BuildConfig
-import com.heybox.checkin.data.FailureKind
-import com.heybox.checkin.data.CheckItem
 import com.heybox.checkin.data.RunRecord
-import com.heybox.checkin.data.SettingsExport
-import com.heybox.checkin.data.SharedSettings
-import com.heybox.checkin.data.UpdateCheck
-import com.heybox.checkin.data.UpdateInfo
-import com.heybox.checkin.data.SessionStore
-import com.heybox.checkin.data.missStreak
-import com.heybox.checkin.data.runSelfCheck
-import com.heybox.checkin.data.selfCheckText
 import com.heybox.checkin.ui.theme.Ink
 import com.heybox.checkin.ui.theme.NumberSmall
 import com.heybox.checkin.ui.theme.NumberStyle
 import com.heybox.checkin.ui.theme.NumberTiny
-import com.heybox.checkin.ui.theme.Glass
 import com.heybox.checkin.ui.theme.glass
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.heybox.checkin.ui.theme.LocalBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import com.heybox.checkin.work.CheckInService
-import com.heybox.checkin.work.RunLock
-import com.heybox.checkin.work.RunState
-import com.heybox.checkin.work.Scheduler
-import com.heybox.checkin.widget.Widgets
-import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
+
+
 
 /** 首页状态。用枚举而不是中文串：文案和判断色只在这里改，不会散到三个文件。 */
 internal enum class TodayStatus(val label: String) {
@@ -156,10 +74,7 @@ internal fun TodayTab(
     status: TodayStatus,
     running: Boolean,
     expired: Boolean,
-    scheduled: Boolean,
-    nextAt: Long,
-    startHour: Int,
-    endHour: Int,
+    plan: AutoPlan,
     today: RunRecord?,
     cells: List<WeekCell>,
     enabledShares: Set<String>,
@@ -229,12 +144,7 @@ internal fun TodayTab(
         Text(balanceText(today), style = NumberTiny, color = Ink.muted)
 
         Spacer(Modifier.height(14.dp))
-        WindowBlock(
-            scheduled = scheduled,
-            nextAt = nextAt,
-            startHour = startHour,
-            endHour = endHour,
-        )
+        WindowBlock(plan = plan)
 
         Spacer(Modifier.height(16.dp))
         SectionHead(title = "每日四件")
@@ -378,7 +288,7 @@ private fun RowScope.Figure(name: String, value: String, modifier: Modifier, fir
 }
 
 @Composable
-private fun WindowBlock(scheduled: Boolean, nextAt: Long, startHour: Int, endHour: Int) {
+private fun WindowBlock(plan: AutoPlan) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -387,17 +297,17 @@ private fun WindowBlock(scheduled: Boolean, nextAt: Long, startHour: Int, endHou
         Text("下次执行", style = MaterialTheme.typography.labelSmall, color = Ink.muted)
         Text(
             when {
-                !scheduled -> "定时未开启"
-                nextAt > 0L -> formatTime(nextAt)
+                !plan.scheduled -> "定时未开启"
+                plan.nextAt > 0L -> formatTime(plan.nextAt)
                 else -> "尚未排定"
             },
             style = NumberSmall,
-            color = if (scheduled && nextAt > 0L) Ink.ink else Ink.muted,
+            color = if (plan.scheduled && plan.nextAt > 0L) Ink.ink else Ink.muted,
             fontSize = 15.sp,
         )
     }
     Spacer(Modifier.height(10.dp))
-    val fraction = trackFraction(nextAt, scheduled, startHour, endHour)
+    val fraction = trackFraction(plan)
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         Box(
             Modifier
@@ -419,8 +329,8 @@ private fun WindowBlock(scheduled: Boolean, nextAt: Long, startHour: Int, endHou
     }
     Spacer(Modifier.height(8.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(hourLabel(startHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
-        Text(hourLabel(endHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+        Text(hourLabel(plan.startHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
+        Text(hourLabel(plan.endHour), style = NumberTiny, color = Ink.muted, fontSize = 10.sp)
     }
 }
 
@@ -432,13 +342,13 @@ internal fun previewNextRun(): Long = java.util.Calendar.getInstance().apply {
     set(java.util.Calendar.MILLISECOND, 0)
 }.timeInMillis
 
-private fun trackFraction(nextAt: Long, scheduled: Boolean, startHour: Int, endHour: Int): Float? {
-    if (!scheduled || nextAt <= 0L) return null
-    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nextAt }
+private fun trackFraction(plan: AutoPlan): Float? {
+    if (!plan.scheduled || plan.nextAt <= 0L) return null
+    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = plan.nextAt }
     val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY) + calendar.get(java.util.Calendar.MINUTE) / 60f
-    val span = (endHour - startHour).toFloat()
+    val span = (plan.endHour - plan.startHour).toFloat()
     if (span <= 0f) return null
-    return ((hour - startHour) / span).coerceIn(0.02f, 0.98f)
+    return ((hour - plan.startHour) / span).coerceIn(0.02f, 0.98f)
 }
 
 @Composable

@@ -212,9 +212,11 @@ private fun previewRunHistory(missed: Boolean = false): List<RunRecord> {
         // 失败那天任务没跑完，四件里不该显示「已完成」
     ).withBalanceOf(done(daysAgo)).copy(taskStates = emptyMap())
 
-    // 造 95 天的数据：跨四个月，用来检查月份切换与更长的余额走势
-    return (94 downTo 0).map { daysAgo ->
+    // 造 95 天的数据：跨四个月，用来检查月份切换与更长的余额走势；
+    // 14、15 号两天留空，让月历的「没跑」计数有东西可看
+    return (94 downTo 0).mapNotNull { daysAgo ->
         when {
+            daysAgo == 14 || daysAgo == 15 -> null
             missed && daysAgo <= 2 -> failed(daysAgo)
             daysAgo == 0 -> done(0)
             daysAgo == 9 || daysAgo == 23 || daysAgo == 57 || daysAgo == 78 -> failed(daysAgo)

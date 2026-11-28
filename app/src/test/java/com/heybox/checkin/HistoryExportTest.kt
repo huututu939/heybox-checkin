@@ -8,6 +8,9 @@ import java.util.Calendar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.heybox.checkin.data.historyJson
+import com.heybox.checkin.data.recordsFromJson
+import org.junit.Assert.assertNull
 
 class HistoryExportTest {
 
@@ -83,5 +86,29 @@ class HistoryExportTest {
         val line = historyCsv(listOf(skipped)).trim().lines()[1]
         // 日期时间,状态,经验增量,H币增量,电池增量 → 增量为空的列相邻两个逗号
         assertTrue(line.contains(",其它入口,,0,,"))
+    }
+
+    @Test
+    fun `JSON 备份往返保留全部字段`() {
+        val record = done(at(2026, 11, 25))
+        val restored = recordsFromJson(historyJson(listOf(record)))!!
+        assertEquals(1, restored.size)
+        assertEquals(record, restored[0])
+    }
+
+    @Test
+    fun `失败记录的分类进 JSON`() {
+        val failed = RunRecord.failure(at(2026, 11, 25), "连接超时", FailureKind.NETWORK)
+        val restored = recordsFromJson(historyJson(listOf(failed)))!!
+        assertEquals("连接超时", restored[0].error)
+        assertEquals("network", restored[0].errorKind)
+        assertEquals(false, restored[0].signed)
+    }
+
+    @Test
+    fun `不是盒签备份或坏 JSON 返回 null`() {
+        assertNull(recordsFromJson("不是JSON"))
+        assertNull(recordsFromJson("""{"app":"other","records":[]}"""))
+        assertNull(recordsFromJson("""{"app":"heybox-checkin"}"""))
     }
 }

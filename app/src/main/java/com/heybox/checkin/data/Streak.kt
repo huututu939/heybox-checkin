@@ -69,9 +69,17 @@ fun signStreak(
     return streak
 }
 
-private fun dayKey(millis: Long): Int {
+/** 「年 * 10000 + 月 * 100 + 日」的当天 key；漏签统计、备份合并共用。 */
+internal fun dayKey(millis: Long): Int {
     val calendar = Calendar.getInstance().apply { timeInMillis = millis }
     return calendar.get(Calendar.YEAR) * 10000 +
         (calendar.get(Calendar.MONTH) + 1) * 100 +
         calendar.get(Calendar.DAY_OF_MONTH)
 }
+
+/** 连签里程碑。挑 7 是让新用户先拿到一个够得着的，180/365 是给长期驻守的目标。 */
+internal val STREAK_MILESTONES = listOf(7, 30, 90, 180, 365)
+
+/** 下一个未达成的里程碑：目标天数与还差几天；全部达成后为 null。 */
+internal fun nextMilestone(streak: Int): Pair<Int, Int>? =
+    STREAK_MILESTONES.firstOrNull { it > streak }?.let { it to (it - streak) }
